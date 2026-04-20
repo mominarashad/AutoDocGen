@@ -8,16 +8,19 @@ async def review_document_node(state):
     prompt = f"""
 You are a senior project manager.
 
-Review the following document and identify:
-- Missing details
-- Weak explanations
-- Poor structure
-- Ambiguities
+Critically review the document.
+
+Return structured feedback in JSON:
+
+{{
+  "missing_sections": [],
+  "improvements": [],
+  "clarity_issues": [],
+  "overall_score": "1-10"
+}}
 
 Document:
 {draft}
-
-Return a structured critique.
 """
 
     result = await llm.ainvoke(prompt)
