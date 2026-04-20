@@ -11,13 +11,23 @@ from app.graph.nodes.improve_agent import improve_document_node
 
 class WorkflowState(TypedDict):
     project_id: str
+    project_name: str
+
     user_trello_key: str
     user_trello_token: str
+
     uploaded_pdf_bytes: bytes
     pdf_headings: List[str]
     selected_headings: List[str]
+
     pm_data: Dict
-    generated_docs: str
+
+    # 👇 ADD THESE
+    generated_docs: str          # draft
+    review_notes: str            # critique
+    improved_docs: str           # final output
+
+    feedback: str                # optional user feedback
 
 
 graph = StateGraph(WorkflowState)
