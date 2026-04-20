@@ -345,12 +345,16 @@ async def get_generated_doc(user_id: str, project_id: str, template_name: str):
     "template_name": template_name,
      })
     if not doc:
-        return await execute_workflow(
-            user_id,
-            project_id,
-            {"template": template_name},
-            db=db
-        )
+    return await execute_workflow(
+        user_id,
+        project_id,
+        {
+            "template": template_name,
+            "source": source,
+            "team_id": team_id
+        },
+        db=db
+    )
 
     return {
         "status": "success",
