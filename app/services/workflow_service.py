@@ -165,9 +165,9 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     # 🚀 RUN AI WORKFLOW
     # ==========================================================
     result = await workflow.ainvoke(input_state)
-    raw_doc = result.get("generated_docs", "")
+    final_doc = result.get("improved_docs") or result.get("generated_docs", "")
 
-    formatted_doc = clean_generated_doc(str(raw_doc), board_name)
+    formatted_doc = clean_generated_doc(str(final_doc), board_name)
 
     # ==========================================================
     # 🔁 MERGE WITH PREVIOUS VERSION
