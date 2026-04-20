@@ -336,12 +336,14 @@ Return improved document only.
 async def get_generated_doc(user_id: str, project_id: str, template_name: str):
     db = app.state.db
 
-    doc = await db["generated_docs"].find_one({
-        "user_id": user_id,
-        "project_id": project_id,
-        "template_name": template_name
-    })
+    source = request.query_params.get("source")
+    team_id = request.query_params.get("team_id")
 
+    doc = await db["generated_docs"].find_one({
+    "user_id": user_id,
+    "project_id": project_id,
+    "template_name": template_name,
+     })
     if not doc:
         return await execute_workflow(
             user_id,
