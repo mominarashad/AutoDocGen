@@ -45,9 +45,7 @@ graph.add_node("improve_agent", improve_document_node)
 # -----------------------
 graph.add_edge(START, "pm_agent")
 graph.add_edge("pm_agent", "doc_agent")
-graph.add_edge("doc_agent", "review_agent")
-graph.add_edge("review_agent", "improve_agent")
-graph.add_edge("improve_agent", END)
+graph.add_edge("doc_agent",END)
 
 # -----------------------
 # Compile graph
