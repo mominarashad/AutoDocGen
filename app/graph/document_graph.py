@@ -1,8 +1,13 @@
 # app/graph/workflow_graph.py
+
 from langgraph.graph import StateGraph, START, END
-from app.graph.nodes.pm_agent import fetch_pm_data_node
-from app.graph.nodes.doc_agent import create_docs_node  # import doc node
 from typing import TypedDict, List, Dict
+
+from app.graph.nodes.pm_agent import fetch_pm_data_node
+from app.graph.nodes.doc_agent import create_docs_node
+from app.graph.nodes.review_agent import review_document_node
+from app.graph.nodes.improve_agent import improve_document_node
+
 
 class WorkflowState(TypedDict):
     project_id: str
@@ -14,15 +19,27 @@ class WorkflowState(TypedDict):
     pm_data: Dict
     generated_docs: str
 
+
 graph = StateGraph(WorkflowState)
 
+# -----------------------
 # Add nodes
+# -----------------------
 graph.add_node("pm_agent", fetch_pm_data_node)
-graph.add_node("doc_agent", create_docs_node)  # add doc node
+graph.add_node("doc_agent", create_docs_node)
+graph.add_node("review_agent", review_document_node)
+graph.add_node("improve_agent", improve_document_node)
 
-# Add edges
+# -----------------------
+# Add edges (full pipeline)
+# -----------------------
 graph.add_edge(START, "pm_agent")
-graph.add_edge("pm_agent", "doc_agent")  # flow pm_agent → doc_agent
-graph.add_edge("doc_agent", END)          # doc_agent → END
+graph.add_edge("pm_agent", "doc_agent")
+graph.add_edge("doc_agent", "review_agent")
+graph.add_edge("review_agent", "improve_agent")
+graph.add_edge("improve_agent", END)
 
+# -----------------------
+# Compile graph
+# -----------------------
 workflow = graph.compile()
