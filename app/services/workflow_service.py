@@ -232,14 +232,16 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     # 💾 SAVE NEW VERSION
     # ==========================================================
     await docs_collection.insert_one({
-        "user_id": user_id,
-        "project_id": project_id,
-        "template_name": template_name,
-        "version": version,
-        "generated_docs": formatted_doc,
-        "board_name": board_name,
-        "created_at": datetime.utcnow()
-    })
+    "user_id": user_id,
+    "project_id": project_id,
+    "template_name": template_name,
+    "version": version,
+    "generated_docs": formatted_doc,
+    "board_name": board_name,
+    "source": source,  # ✅ ADD
+    "team_id": data.get("team_id"),  # ✅ ADD
+    "created_at": datetime.utcnow()
+})
 
     return {
         "status": "success",
