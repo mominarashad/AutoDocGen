@@ -9,7 +9,14 @@ async def improve_document_node(state):
     prompt = f"""
 You are an expert technical writer.
 
-Improve the document using the review feedback.
+Rewrite the document using the review feedback.
+
+RULES:
+- Make it professional
+- Add missing sections
+- Fix clarity issues
+- Improve structure
+- Use proper headings
 
 Original Document:
 {draft}
@@ -17,12 +24,11 @@ Original Document:
 Review Feedback:
 {review}
 
-Return a FINAL polished, structured, professional document.
-Use proper headings, sections, clarity, and completeness.
+Return FINAL polished document.
 """
 
     result = await llm.ainvoke(prompt)
 
     return {
-        "generated_docs": result.content
+        "improved_docs": result.content
     }
