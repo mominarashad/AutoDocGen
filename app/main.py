@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
+from datetime import datetime  # ✅ added
 
 # ------------------ Load ENV ------------------
 load_dotenv()
@@ -53,7 +54,7 @@ from app.routes.trello_webhook import router as trello_webhook_router
 # Slack routers
 from app.routes.slack_auth import router as slack_auth_router
 from app.routes.slack_channels import router as slack_channels_router
-from app.routes.slack_messages import router as slack_messages_router  # ✅ FIX ADDED
+from app.routes.slack_messages import router as slack_messages_router
 
 app.include_router(auth_router.router, prefix="/auth")
 app.include_router(user_router.router, prefix="/api")
@@ -65,7 +66,7 @@ app.include_router(trello_webhook_router)
 # Slack routes
 app.include_router(slack_auth_router, prefix="/slack/auth")
 app.include_router(slack_channels_router, prefix="/api")
-app.include_router(slack_messages_router, prefix="/api")  # ✅ FIX ADDED
+app.include_router(slack_messages_router, prefix="/api")
 
 # ------------------ Services ------------------
 from app.services.trello_service import connect_to_trello
@@ -267,6 +268,68 @@ async def run_workflow(request: Request):
         data,
         db=request.app.state.db
     )
+
+# ------------------ Improve with Feedback ------------------
+@app.post("/workflow/improve-with-feedback")
+async def improve_with_feedback(request: Request):
+    data = await request.json()
+    db = request.app.state.db
+
+    user_id = data.get("user_id")
+    project_id = data.get("project_id")
+    template_name = data.get("template_name")
+    feedback = data.get("feedback")
+
+    if not all([user_id, project_id, template_name, feedback]):
+        raise HTTPException(status_code=400, detail="Missing required fields")
+
+    doc = await db["generated_docs"].find_one(
+        {
+            "user_id": user_id,
+            "project_id": project_id,
+            "template_name": template_name
+        },
+        sort=[("version", -1)]
+    )
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    llm = ChatGoogleGenerativeAI(model='gemini-2.5-flash')
+
+    prompt = f"""
+Improve the document based on user feedback.
+
+DOCUMENT:
+{doc.get("generated_docs", "")}
+
+FEEDBACK:
+{feedback}
+
+Return improved document only.
+"""
+
+    result = await llm.ainvoke(prompt)
+    improved_doc = result.content if hasattr(result, "content") else str(result)
+
+    new_version = (doc.get("version") or 1) + 1
+
+    await db["generated_docs"].insert_one({
+        "user_id": user_id,
+        "project_id": project_id,
+        "template_name": template_name,
+        "version": new_version,
+        "generated_docs": improved_doc,
+        "board_name": doc.get("board_name", "Unknown"),
+        "created_at": datetime.utcnow()
+    })
+
+    return {
+        "status": "success",
+        "version": new_version,
+        "generated_docs": improved_doc
+    }
 
 # ------------------ Generated Doc ------------------
 @app.get("/workflow/generated")
