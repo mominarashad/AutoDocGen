@@ -150,16 +150,17 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     # 🧠 WORKFLOW STATE
     # ==========================================================
     input_state = WorkflowState(
-        project_id=project_id,
-        project_name=board_name,
-        user_trello_key=os.getenv("TRELLO_API_KEY"),
-        user_trello_token=trello_token,
-        pm_data=pm_data,
-        uploaded_pdf_bytes=b"",
-        pdf_headings=pdf_headings,
-        selected_headings=selected_headings,
-        generated_docs=""
-    )
+       project_id=project_id,
+       project_name=board_name,
+       user_trello_key=os.getenv("TRELLO_API_KEY"),
+       user_trello_token=trello_token,
+       pm_data=pm_data,
+       uploaded_pdf_bytes=b"",
+       pdf_headings=pdf_headings,
+       selected_headings=selected_headings,
+       generated_docs="",
+       feedback=data.get("feedback", "")   # ✅ CRITICAL
+)
 
     # ==========================================================
     # 🚀 RUN AI WORKFLOW
