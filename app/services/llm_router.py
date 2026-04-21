@@ -6,7 +6,7 @@ import os
 # ✅ GEMINI (working models)
 # -----------------------
 gemini_llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash",   # ✅ SAFE + AVAILABLE
+    model="gemini-2.0-flash",   #  SAFE + AVAILABLE
     api_key=os.getenv("GOOGLE_API_KEY"),
     temperature=0.3
 )
@@ -15,7 +15,7 @@ gemini_llm = ChatGoogleGenerativeAI(
 # ✅ GROQ (UPDATED MODEL)
 # -----------------------
 groq_llm = ChatGroq(
-    model="llama3-8b-8192",   # ✅ REPLACE 70B (deprecated)
+    model="llama-3.1-70b-versatile",   # ✅ REPLACE 70B (deprecated)
     api_key=os.getenv("GROQ_API_KEY")
 )
 
