@@ -1,6 +1,4 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
-
-llm = ChatGoogleGenerativeAI(model='gemini-2.5-flash')
+from app.services.llm_router import call_llm
 
 async def improve_document_node(state):
     draft = state.get("generated_docs", "")
@@ -16,19 +14,16 @@ RULES:
 - Add missing sections
 - Fix clarity issues
 - Improve structure
-- Use proper headings
 
 Original Document:
 {draft}
 
 Review Feedback:
 {review}
-
-Return FINAL polished document.
 """
 
-    result = await llm.ainvoke(prompt)
+    result = call_llm(prompt, mode="groq")  # ✅ FAST
 
     return {
-        "improved_docs": result.content
+        "improved_docs": result.content if hasattr(result, "content") else str(result)
     }
