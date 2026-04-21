@@ -1,89 +1,21 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_groq import ChatGroq
+from app.services.llm_router import call_llm
 from app.langsmith.load_prompt import load_prompt_from_langsmith
-from tenacity import retry, stop_after_attempt, wait_exponential
-import os
-
-# =========================================================
-# 🧠 MODELS (Gemini + Groq Hybrid)
-# =========================================================
-
-gemini_llm = ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash-ex",
-    temperature=0.3,
-    api_key=os.getenv("GOOGLE_API_KEY")
-)
-
-groq_llm = ChatGroq(
-    model="llama3-70b-8192",
-    api_key=os.getenv("GROQ_API_KEY")
-)
-
-# =========================================================
-# 🔥 RETRY WRAPPER (Gemini stability fix)
-# =========================================================
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(min=2, max=10))
-def safe_invoke(chain, payload):
-    return chain.invoke(payload)
-
-
-# =========================================================
-# 🧠 SMART LLM ROUTER
-# =========================================================
-def call_llm(prompt, mode="gemini"):
-    """
-    mode:
-      - gemini → high quality
-      - groq → fast/cheap
-    """
-
-    try:
-        if mode == "groq":
-            return groq_llm.invoke(prompt)
-
-        return gemini_llm.invoke(prompt)
-
-    except Exception as e:
-        print("⚠️ Primary LLM failed, switching fallback:", e)
-
-        if mode == "gemini":
-            return groq_llm.invoke(prompt)
-
-        raise e
-
 
 # =========================================================
 # 🧠 DOCUMENT GENERATION
 # =========================================================
-def generate_documentation(
-    cleaned_pm_data: str,
-    pdf_headings: list,
-    selected_headings: list
-):
-    prompt = load_prompt_from_langsmith("doc_prompt_pdf_selected")
+def generate_documentation(cleaned_pm_data, pdf_headings, selected_headings):
+    prompt_template = load_prompt_from_langsmith("doc_prompt_pdf_selected")
 
-    chain_input = {
-        "cleaned_pm_data": cleaned_pm_data,
-        "pdf_headings": pdf_headings,
-        "selected_headings": selected_headings,
-    }
+    prompt = prompt_template.format(
+        cleaned_pm_data=cleaned_pm_data,
+        pdf_headings=pdf_headings,
+        selected_headings=selected_headings,
+    )
 
-    # 🔥 Gemini for high-quality writing
-    try:
-        result = safe_invoke(
-            prompt | gemini_llm,
-            chain_input
-        )
-    except Exception as e:
-        print("⚠️ Gemini failed → switching to Groq fallback:", e)
-
-        result = safe_invoke(
-            prompt | groq_llm,
-            chain_input
-        )
+    result = call_llm(prompt, mode="gemini")
 
     return result.content if hasattr(result, "content") else str(result)
-
 
 # =========================================================
 # 🧹 FORMAT PM DATA
