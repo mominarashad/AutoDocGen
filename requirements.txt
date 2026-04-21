@@ -19,7 +19,7 @@ langsmith
 
 langchain-google-genai
 langchain-gemini
-
+langchain-groq
 PyPDF2
 pymupdf
 matplotlib
