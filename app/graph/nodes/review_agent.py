@@ -1,6 +1,4 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
-
-llm = ChatGoogleGenerativeAI(model='gemini-2.5-flash')
+from app.services.llm_router import call_llm
 
 async def review_document_node(state):
     draft = state.get("generated_docs", "")
@@ -23,8 +21,8 @@ Document:
 {draft}
 """
 
-    result = await llm.ainvoke(prompt)
+    result = call_llm(prompt, mode="groq")  # ✅ FAST + CHEAP
 
     return {
-        "review_notes": result.content
+        "review_notes": result.content if hasattr(result, "content") else str(result)
     }
