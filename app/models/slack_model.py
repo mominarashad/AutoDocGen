@@ -40,7 +40,8 @@ async def get_slack_token(user_id: str, team_id: str, db):
     token = doc.get("access_token")
 
     if not token:
-        print(f"❌ Slack token exists but empty | user={user_id} team={team_id}")
+        print(f"❌ Slack token missing in doc | user={user_id} team={team_id}")
         return None
 
+    print(f"✅ Slack token found for team={team_id}")
     return token
