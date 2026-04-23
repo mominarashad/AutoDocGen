@@ -3,65 +3,49 @@ from app.models.user_token_model import get_user_token
 from app.models.slack_model import get_slack_token
 from app.services.trello_service import get_board_name
 from app.services.cleaner import clean_generated_doc
-from app.services.slack_service import (
-    fetch_channel_messages,
-    join_channel
-)
-from app.services.slack_workflow import run_slack_workflow
+from app.services.slack_service import fetch_channel_messages, join_channel
 from datetime import datetime
 import re
 import os
 
 
 async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=None):
+
     if db is None:
         raise RuntimeError("Database instance not provided")
 
     docs_collection = db["generated_docs"]
 
-    pdf_headings = data.get("pdf_headings", []) if data else []
-    selected_headings = data.get("selected_headings", []) if data else []
+    # ==========================================================
+    # INPUT SAFE PARSING
+    # ==========================================================
+    data = data or {}
+
+    pdf_headings = data.get("pdf_headings", [])
+    selected_headings = data.get("selected_headings", [])
     template_name = str(data.get("template", "")).strip()
-    source = data.get("source") if data else None
-
-    if not source:
-        print("⚠️ source missing → defaulting to trello")
-        source = "trello"
-
-    # ----------------- DEBUG LOGS -----------------
-    print("🔥 execute_workflow - user_id:", user_id)
-    print("🔥 execute_workflow - project_id:", project_id)
-    print("🔥 execute_workflow - template_name:", template_name)
-    print("🔥 execute_workflow - source:", source)
-    # ----------------------------------------------
+    source = data.get("source") or "trello"
 
     if not template_name:
-        return {
-            "status": "error",
-            "message": "Missing template name"
-        }
+        return {"status": "error", "message": "Missing template name"}
+
+    print("🔥 execute_workflow")
+    print("user_id:", user_id)
+    print("project_id:", project_id)
+    print("template_name:", template_name)
+    print("source:", source)
 
     pm_data = {}
     board_name = ""
     trello_token = None
 
     # ==========================================================
-    # 🔵 SLACK FLOW (WITH DEBUGGING ADDED)
+    # 🔵 SLACK FLOW
     # ==========================================================
     if source == "slack":
         print("✅ Slack flow triggered")
 
-        team_id = data.get("team_id") if data else None
-
-        # ======================================================
-        # 🧪 SLACK DEBUG START (ADDED AS REQUESTED)
-        # ======================================================
-        print("🧪 SLACK WORKFLOW START")
-        print("USER:", user_id)
-        print("TEAM:", team_id)
-        print("CHANNEL:", project_id)
-        print("TOKEN EXISTS:", False)  # will update after fetch
-        # ======================================================
+        team_id = data.get("team_id")
 
         if not team_id:
             return {
@@ -69,10 +53,9 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
                 "message": "team_id required for Slack"
             }
 
-        # 🔑 Get Slack token
+        # 🔑 GET SLACK TOKEN FROM DB
         slack_token = await get_slack_token(user_id, team_id, db)
 
-        # update debug info after token fetch
         print("TOKEN EXISTS:", bool(slack_token))
 
         if not slack_token:
@@ -81,21 +64,12 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
                 "message": "Slack workspace not connected"
             }
 
-        # ======================================================
-        # 🚀 AUTO JOIN CHANNEL
-        # ======================================================
+        # 🚀 JOIN CHANNEL
         join_res = await join_channel(slack_token, project_id)
-
         print("🧪 JOIN RESPONSE:", join_res)
 
-        if not join_res.get("ok"):
-            print("⚠️ Join channel response:", join_res)
-
-        # ======================================================
         # 📥 FETCH MESSAGES
-        # ======================================================
         messages_res = await fetch_channel_messages(slack_token, project_id)
-
         print("🧪 FETCH RESPONSE:", messages_res)
 
         if not messages_res.get("ok"):
@@ -127,6 +101,7 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     # 🟢 TRELLO FLOW
     # ==========================================================
     elif source == "trello":
+
         trello_token = await get_user_token(user_id, db)
 
         if not trello_token:
@@ -136,6 +111,11 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
             }
 
         board_name = await get_board_name(user_id, project_id, db)
+
+        pm_data = {
+            "source": "trello",
+            "board_id": project_id
+        }
 
     # ==========================================================
     # ❌ INVALID SOURCE
@@ -147,28 +127,39 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
         }
 
     # ==========================================================
-    # 🧠 WORKFLOW STATE
+    # 🧠 WORKFLOW STATE (SAFE + COMPLETE)
     # ==========================================================
     input_state = WorkflowState(
-       project_id=project_id,
-       project_name=board_name,
-       user_trello_key=os.getenv("TRELLO_API_KEY"),
-       user_trello_token=trello_token,
-       pm_data=pm_data,
-       uploaded_pdf_bytes=b"",
-       pdf_headings=pdf_headings,
-       selected_headings=selected_headings,
-       generated_docs="",
-       feedback=data.get("feedback", "")   # ✅ CRITICAL
-)
+        project_id=project_id,
+        project_name=board_name,
+
+        # 🔥 SAFE TRELLO FIELDS (NO CRASH IN SLACK MODE)
+        user_trello_key=os.getenv("TRELLO_API_KEY") if source == "trello" else "",
+        user_trello_token=trello_token if source == "trello" else "",
+
+        pm_data=pm_data,
+
+        uploaded_pdf_bytes=b"",
+        pdf_headings=pdf_headings,
+        selected_headings=selected_headings,
+
+        generated_docs="",
+        feedback=data.get("feedback", "")
+    )
 
     # ==========================================================
-    # 🚀 RUN AI WORKFLOW
+    # 🚀 RUN WORKFLOW
     # ==========================================================
     result = await workflow.ainvoke(input_state)
-    final_doc = result.get("improved_docs") or result.get("generated_docs", "")
 
+    final_doc = result.get("improved_docs") or result.get("generated_docs", "")
     formatted_doc = clean_generated_doc(str(final_doc), board_name)
+
+    # ==========================================================
+    # 🛡 SAFETY FALLBACK
+    # ==========================================================
+    if not formatted_doc.strip():
+        formatted_doc = "No content generated."
 
     # ==========================================================
     # 🔁 MERGE WITH PREVIOUS VERSION
@@ -213,12 +204,6 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
             formatted_doc = existing_doc
 
     # ==========================================================
-    # 🛡 SAFETY FALLBACK
-    # ==========================================================
-    if not formatted_doc.strip():
-        formatted_doc = "No content generated."
-
-    # ==========================================================
     # 📦 VERSIONING
     # ==========================================================
     version_count = await docs_collection.count_documents({
@@ -230,20 +215,23 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     version = version_count + 1
 
     # ==========================================================
-    # 💾 SAVE NEW VERSION
+    # 💾 SAVE TO DB
     # ==========================================================
     await docs_collection.insert_one({
-    "user_id": user_id,
-    "project_id": project_id,
-    "template_name": template_name,
-    "version": version,
-    "generated_docs": formatted_doc,
-    "board_name": board_name,
-    "source": source,  # ✅ ADD
-    "team_id": data.get("team_id"),  # ✅ ADD
-    "created_at": datetime.utcnow()
-})
+        "user_id": user_id,
+        "project_id": project_id,
+        "template_name": template_name,
+        "version": version,
+        "generated_docs": formatted_doc,
+        "board_name": board_name,
+        "source": source,
+        "team_id": data.get("team_id"),
+        "created_at": datetime.utcnow()
+    })
 
+    # ==========================================================
+    # RESPONSE
+    # ==========================================================
     return {
         "status": "success",
         "template_name": template_name,
