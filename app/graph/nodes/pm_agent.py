@@ -9,6 +9,7 @@ async def get_board_id_from_name(
     trello_token: str,
     board_name: str
 ) -> str:
+
     if not board_name or board_name == "undefined":
         raise ValueError("Board name is empty or undefined")
 
@@ -33,79 +34,81 @@ async def get_board_id_from_name(
 
 
 # --------------------------------------------------
-# PM Agent Node (MULTI-SOURCE SAFE)
+# PM Agent Node (FULLY FIXED MULTI-SOURCE)
 # --------------------------------------------------
 async def fetch_pm_data_node(state: dict) -> dict:
 
+    pm_data = state.get("pm_data", {})
+    source = pm_data.get("source", "trello")
+
+    # ==========================================================
+    # 🔵 SLACK FLOW (NO TRELLO DEPENDENCY)
+    # ==========================================================
+    if source == "slack":
+        print("✅ Slack detected → skipping Trello processing")
+
+        # DO NOT TOUCH TRELLO LOGIC
+        state["pm_data"] = pm_data
+        return state
+
+    # ==========================================================
+    # 🟢 TRELLO FLOW ONLY BELOW
+    # ==========================================================
     trello_key = state.get("user_trello_key")
     trello_token = state.get("user_trello_token")
 
     project_id = state.get("project_id") or state.get("board_id")
     project_name = state.get("project_name")
 
-    pm_data = state.get("pm_data", {})
+    # 🔥 ONLY VALIDATE TRELLO IF WE ARE IN TRELLO MODE
+    if source == "trello":
 
-    # 🔥 DETECT SOURCE (IMPORTANT FIX)
-    source = pm_data.get("source", "trello")
+        if not trello_key:
+            raise ValueError("TRELLO_API_KEY missing in workflow state")
 
-    if not trello_key:
-        raise ValueError("TRELLO_API_KEY missing in workflow state")
+        if not trello_token:
+            raise ValueError("Trello token missing in workflow state")
 
-    # ==========================================================
-    # 🔵 SLACK FLOW (SAFE EXIT - NO TRELLO REQUIRED)
-    # ==========================================================
-    if source == "slack":
-        print("✅ Slack detected → skipping Trello PM processing")
+        if not project_id and not project_name:
+            raise ValueError("Both project_id and project_name are missing")
 
-        # Slack already provides pm_data, just pass through
-        state["pm_data"] = pm_data
+        # --------------------------------------------------
+        # Resolve board ID
+        # --------------------------------------------------
+        if project_id and len(project_id) == 24:
+            board_id = project_id
+        else:
+            board_id = await get_board_id_from_name(
+                trello_key,
+                trello_token,
+                project_name
+            )
+
+        # --------------------------------------------------
+        # Fetch Trello cards
+        # --------------------------------------------------
+        url = f"https://api.trello.com/1/boards/{board_id}/cards"
+        params = {
+            "key": trello_key,
+            "token": trello_token,
+            "fields": "id,name,desc,idList"
+        }
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            res = await client.get(url, params=params)
+
+        if res.status_code != 200:
+            raise ValueError(f"Trello cards fetch failed: {res.text}")
+
+        state["pm_data"] = {
+            "source": "trello",
+            "board_id": board_id,
+            "cards": res.json()
+        }
+
         return state
 
     # ==========================================================
-    # 🟢 TRELLO FLOW (UNCHANGED LOGIC)
+    # ❌ UNKNOWN SOURCE SAFETY
     # ==========================================================
-    if not trello_token:
-        raise ValueError("Trello token missing in workflow state")
-
-    if not project_id and not project_name:
-        raise ValueError("Both project_id and project_name are missing")
-
-    # --------------------------------------------------
-    # Resolve board ID
-    # --------------------------------------------------
-    if project_id and len(project_id) == 24:
-        board_id = project_id
-
-    elif project_name:
-        board_id = await get_board_id_from_name(
-            trello_key,
-            trello_token,
-            project_name
-        )
-
-    else:
-        raise ValueError("Unable to resolve Trello board")
-
-    # --------------------------------------------------
-    # Fetch Trello cards
-    # --------------------------------------------------
-    url = f"https://api.trello.com/1/boards/{board_id}/cards"
-    params = {
-        "key": trello_key,
-        "token": trello_token,
-        "fields": "id,name,desc,idList"
-    }
-
-    async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.get(url, params=params)
-
-    if res.status_code != 200:
-        raise ValueError(f"Trello cards fetch failed: {res.text}")
-
-    state["pm_data"] = {
-        "source": "trello",
-        "board_id": board_id,
-        "cards": res.json()
-    }
-
-    return state
+    raise ValueError(f"Unknown source: {source}")
