@@ -50,7 +50,7 @@ from app.routes import user as user_router
 from app.routes import templates as templates_router
 from app.routes import generated_docs as generated_docs_router
 from app.routes.trello_webhook import router as trello_webhook_router
-
+from app.routes.workflow_human import router as workflow_human_router
 # Slack routers
 from app.routes.slack_auth import router as slack_auth_router
 from app.routes.slack_channels import router as slack_channels_router
@@ -67,6 +67,7 @@ app.include_router(trello_webhook_router)
 app.include_router(slack_auth_router, prefix="/slack/auth")
 app.include_router(slack_channels_router, prefix="/api")
 app.include_router(slack_messages_router, prefix="/api")
+app.include_router(workflow_human_router)
 
 # ------------------ Services ------------------
 from app.services.trello_service import connect_to_trello
