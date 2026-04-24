@@ -14,7 +14,9 @@ async def build_state(payload: dict, db):
 
     user_id = payload.get("user_id")
     project_id = payload.get("project_id")
-    source = payload.get("source") or "trello"
+    source = payload.get("source")
+    if not source:
+        source = "trello" if payload.get("board_id") else "slack"
     team_id = payload.get("team_id")
 
     if not user_id or not project_id:
