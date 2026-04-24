@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from datetime import datetime  # ✅ added
 
 # ------------------ Load ENV ------------------
+print("🔥 DEBUG: Loading environment variables...")
 load_dotenv()
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
@@ -26,13 +27,21 @@ SLACK_CLIENT_ID = os.getenv("SLACK_CLIENT_ID")
 SLACK_CLIENT_SECRET = os.getenv("SLACK_CLIENT_SECRET")
 SLACK_REDIRECT_URI = os.getenv("SLACK_REDIRECT_URI")
 
+print("🔥 DEBUG: FRONTEND_URL =", FRONTEND_URL)
+print("🔥 DEBUG: DB_NAME =", DB_NAME)
+print("🔥 DEBUG: PORT =", PORT)
+
 if not MONGODB_URI:
     raise RuntimeError("MONGODB_URI not set")
 
+print("🔥 DEBUG: MongoDB URI loaded successfully")
+
 # ------------------ App ------------------
+print("🔥 DEBUG: Initializing FastAPI app...")
 app = FastAPI()
 
 # ------------------ CORS ------------------
+print("🔥 DEBUG: Configuring CORS...")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -45,16 +54,20 @@ app.add_middleware(
 )
 
 # ------------------ Routers ------------------
+print("🔥 DEBUG: Importing routers...")
+
 from app.routes import auth as auth_router
 from app.routes import user as user_router
 from app.routes import templates as templates_router
 from app.routes import generated_docs as generated_docs_router
 from app.routes.trello_webhook import router as trello_webhook_router
 from app.routes.workflow_human import router as workflow_human_router
-# Slack routers
+
 from app.routes.slack_auth import router as slack_auth_router
 from app.routes.slack_channels import router as slack_channels_router
 from app.routes.slack_messages import router as slack_messages_router
+
+print("🔥 DEBUG: Registering routers...")
 
 app.include_router(auth_router.router, prefix="/auth")
 app.include_router(user_router.router, prefix="/api")
@@ -63,13 +76,14 @@ app.include_router(generated_docs_router.router, prefix="/generated-docs")
 
 app.include_router(trello_webhook_router)
 
-# Slack routes
 app.include_router(slack_auth_router, prefix="/slack/auth")
 app.include_router(slack_channels_router, prefix="/api")
 app.include_router(slack_messages_router, prefix="/api")
 app.include_router(workflow_human_router)
 
 # ------------------ Services ------------------
+print("🔥 DEBUG: Loading services...")
+
 from app.services.trello_service import connect_to_trello
 from app.models.user_token_model import (
     get_all_user_tokens,
@@ -83,6 +97,7 @@ from app.services.slack_service import fetch_channels
 # ------------------ MongoDB Startup ------------------
 @app.on_event("startup")
 async def startup():
+    print("🔥 DEBUG: Starting MongoDB connection...")
 
     client = motor.motor_asyncio.AsyncIOMotorClient(MONGODB_URI)
     app.state.mongo_client = client
@@ -96,20 +111,25 @@ async def startup():
         unique=True,
         sparse=True
     )
+    print("🔥 DEBUG: notifications index ensured")
 
     await db["slack_connections"].create_index(
         [("user_id", 1), ("team_id", 1)],
         unique=True
     )
+    print("🔥 DEBUG: slack_connections index ensured")
 
     users = await get_all_user_tokens(db)
+    print(f"🔥 DEBUG: Loaded users = {len(users)}")
 
     if not users:
         print("⚠️ No users with Trello tokens found")
         return
 
     if getattr(app.state, "webhooks_registered", False):
+        print("🔥 DEBUG: Webhooks already registered, skipping")
         return
+
     app.state.webhooks_registered = True
 
     async with httpx.AsyncClient(timeout=20) as client_http:
@@ -118,7 +138,10 @@ async def startup():
             token = user.get("trello_token")
             user_id = user.get("user_id")
 
+            print(f"🔥 DEBUG: Processing user {user_id}")
+
             if not token:
+                print(f"⚠️ DEBUG: No token for user {user_id}")
                 continue
 
             try:
@@ -132,6 +155,9 @@ async def startup():
                 )
                 res.raise_for_status()
                 boards = res.json()
+
+                print(f"🔥 DEBUG: Boards fetched for {user_id} = {len(boards)}")
+
             except Exception as e:
                 print(f"❌ Failed boards for user {user_id}: {e}")
                 continue
@@ -145,26 +171,32 @@ async def startup():
                     }},
                     upsert=True
                 )
+                print(f"🔥 DEBUG: mapped board {board['name']} -> {user_id}")
 
 # ------------------ Shutdown ------------------
 @app.on_event("shutdown")
 async def shutdown():
+    print("🔥 DEBUG: Shutting down MongoDB connection...")
     app.state.mongo_client.close()
 
 # ------------------ Trello ------------------
 @app.get("/trello/connect")
 def trello_connect(request: Request):
     user_id = request.query_params.get("user_id")
+    print(f"🔥 DEBUG: Trello connect request user_id={user_id}")
     return connect_to_trello(user_id)
 
 @app.get("/trello/callback")
 def trello_callback():
+    print("🔥 DEBUG: Trello callback hit")
     return RedirectResponse(f"{FRONTEND_URL}/boards")
 
 @app.post("/trello/save_token")
 async def trello_save_token(request: Request):
     data = await request.json()
     db = app.state.db
+
+    print(f"🔥 DEBUG: Saving Trello token for user {data.get('user_id')}")
 
     await save_user_token(
         data["user_id"],
@@ -177,10 +209,13 @@ async def trello_save_token(request: Request):
 # ------------------ Boards ------------------
 @app.get("/trello/boards_with_headings")
 async def boards_with_headings(user_id: str):
+    print(f"🔥 DEBUG: Fetch boards for user {user_id}")
+
     db = app.state.db
 
     token = await get_user_token(user_id, db)
     if not token:
+        print("❌ DEBUG: No token found")
         return {"status": "error", "boards": []}
 
     async with httpx.AsyncClient(timeout=15) as client:
@@ -193,6 +228,8 @@ async def boards_with_headings(user_id: str):
             }
         )
         boards = res.json()
+
+    print(f"🔥 DEBUG: boards received = {len(boards)}")
 
     docs = await db["generated_docs"].find({"user_id": user_id}).to_list(None)
     doc_map = {d["project_id"]: d for d in docs}
@@ -216,6 +253,8 @@ async def boards_with_headings(user_id: str):
 # ------------------ Slack Channels ------------------
 @app.get("/slack/channels_with_headings")
 async def channels_with_headings(user_id: str, team_id: str):
+    print(f"🔥 DEBUG: Slack channels request user={user_id}, team={team_id}")
+
     db = app.state.db
 
     from app.models.slack_model import get_slack_token
@@ -223,14 +262,17 @@ async def channels_with_headings(user_id: str, team_id: str):
     token = await get_slack_token(user_id, team_id, db)
 
     if not token:
+        print("❌ DEBUG: Slack token missing")
         return {"status": "error", "channels": []}
 
     data = await fetch_channels(token)
 
     if not data.get("ok"):
+        print("❌ DEBUG: Slack API failed")
         return {"status": "error", "channels": []}
 
     channels = data.get("channels", [])
+    print(f"🔥 DEBUG: Slack channels fetched = {len(channels)}")
 
     docs = await db["generated_docs"].find({"user_id": user_id}).to_list(None)
     doc_map = {d["project_id"]: d for d in docs}
@@ -260,7 +302,10 @@ async def channels_with_headings(user_id: str, team_id: str):
 async def run_workflow(request: Request):
     data = await request.json()
 
+    print("🔥 DEBUG: Workflow run request", data)
+
     if not all(k in data for k in ("user_id", "project_id", "template")):
+        print("❌ DEBUG: Missing workflow fields")
         raise HTTPException(status_code=400, detail="Missing required fields")
 
     return await execute_workflow(
@@ -276,12 +321,15 @@ async def improve_with_feedback(request: Request):
     data = await request.json()
     db = request.app.state.db
 
+    print("🔥 DEBUG: Improve with feedback request received")
+
     user_id = data.get("user_id")
     project_id = data.get("project_id")
     template_name = data.get("template_name")
     feedback = data.get("feedback")
 
     if not all([user_id, project_id, template_name, feedback]):
+        print("❌ DEBUG: Missing feedback fields")
         raise HTTPException(status_code=400, detail="Missing required fields")
 
     doc = await db["generated_docs"].find_one(
@@ -294,7 +342,10 @@ async def improve_with_feedback(request: Request):
     )
 
     if not doc:
+        print("❌ DEBUG: Document not found")
         raise HTTPException(status_code=404, detail="Document not found")
+
+    print("🔥 DEBUG: Sending to Gemini for improvement")
 
     from langchain_google_genai import ChatGoogleGenerativeAI
     llm = ChatGoogleGenerativeAI(model='gemini-2.5-flash')
@@ -326,6 +377,8 @@ Return improved document only.
         "created_at": datetime.utcnow()
     })
 
+    print(f"🔥 DEBUG: New version saved = {new_version}")
+
     return {
         "status": "success",
         "version": new_version,
@@ -340,10 +393,14 @@ async def get_generated_doc(
     template_name: str,
     request: Request
 ):
+    print("🔥 DEBUG: Fetch generated doc request")
+
     db = request.app.state.db
 
     source = request.query_params.get("source")
     team_id = request.query_params.get("team_id")
+
+    print(f"🔥 DEBUG: source={source}, team_id={team_id}")
 
     doc = await db["generated_docs"].find_one({
         "user_id": user_id,
@@ -352,6 +409,7 @@ async def get_generated_doc(
     })
 
     if not doc:
+        print("⚠️ DEBUG: No doc found, triggering workflow")
         return await execute_workflow(
             user_id,
             project_id,
@@ -362,8 +420,8 @@ async def get_generated_doc(
             },
             db=db
         )
-        print("🔥 WORKFLOW REQUEST DATA:", data)
-        print("🔥 SOURCE IN REQUEST:", data.get("source"))
+
+    print("🔥 DEBUG: Document found, returning")
 
     return {
         "status": "success",
@@ -374,4 +432,5 @@ async def get_generated_doc(
 
 # ------------------ Run ------------------
 if __name__ == "__main__":
+    print("🔥 DEBUG: Starting Uvicorn server...")
     uvicorn.run("app.main:app", host="0.0.0.0", port=PORT, reload=True)
