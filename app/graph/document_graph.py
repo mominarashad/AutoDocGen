@@ -6,7 +6,7 @@ from typing import TypedDict, List, Dict
 from app.graph.nodes.doc_draft_node import create_draft_node
 from app.graph.nodes.human_review_node import human_review_node
 from app.graph.nodes.doc_finalize_node import finalize_doc_node
-
+from langgraph.checkpoint.memory import MemorySaver
 
 class WorkflowState(TypedDict, total=False):
     project_id: str
@@ -21,7 +21,7 @@ class WorkflowState(TypedDict, total=False):
 
 
 graph = StateGraph(WorkflowState)
-
+checkpointer = MemorySaver()
 # Add nodes
 graph.add_node("pm_agent", fetch_pm_data_node)
 graph.add_node("doc_draft", create_draft_node)
@@ -34,4 +34,4 @@ graph.add_edge("doc_draft", "human_review")
 graph.add_edge("human_review", "doc_finalize")
 graph.add_edge("doc_finalize", END)
 
-workflow = graph.compile()
+workflow = graph.compile(checkpointer=checkpointer)
