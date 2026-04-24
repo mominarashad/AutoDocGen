@@ -53,6 +53,7 @@ async def fetch_pm_data_node(state: dict) -> dict:
     if source == "slack":
         print("✅ Slack detected → bypassing Trello completely")
 
+        # pass-through (already prepared in execute_workflow)
         state["pm_data"] = pm_data
         return state
 
