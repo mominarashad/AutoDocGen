@@ -26,9 +26,11 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     template_name = str(data.get("template", "")).strip()
     source = data.get("source")
 
-    if source not in ["slack", "trello"]:
-        raise ValueError(f"Invalid or missing source: {source}")
+    if not source:
+        raise ValueError(f"🔥 SOURCE MISSING in workflow payload: {data}")
 
+    if source not in ["slack", "trello"]:
+        raise ValueError(f"Invalid source: {source}")
     if not template_name:
         return {"status": "error", "message": "Missing template name"}
 
