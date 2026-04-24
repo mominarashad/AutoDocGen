@@ -25,8 +25,9 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     selected_headings = data.get("selected_headings", [])
     template_name = str(data.get("template", "")).strip()
     source = data.get("source")
+
     if source not in ["slack", "trello"]:
-          raise ValueError(f"Invalid or missing source: {source}")
+        raise ValueError(f"Invalid or missing source: {source}")
 
     if not template_name:
         return {"status": "error", "message": "Missing template name"}
@@ -47,12 +48,15 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     if source == "slack":
         print("✅ Slack flow triggered")
 
-        team_id = data.get("team_id") or data.get("teamId")
+        # 🔥 FIX: robust team_id handling
+        team_id = (
+            data.get("team_id")
+            or data.get("teamId")
+            or os.environ.get("TEAM_ID")  # optional fallback safety
+        )
+
         if not team_id:
-            return {
-                "status": "error",
-                "message": "team_id required for Slack"
-            }
+            raise ValueError("🔥 CRITICAL: team_id is required for Slack flow")
 
         # 🔑 GET SLACK TOKEN FROM DB
         slack_token = await get_slack_token(user_id, team_id, db)
@@ -119,22 +123,12 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
         }
 
     # ==========================================================
-    # ❌ INVALID SOURCE
-    # ==========================================================
-    else:
-        return {
-            "status": "error",
-            "message": f"Invalid source: {source}"
-        }
-
-    # ==========================================================
-    # 🧠 WORKFLOW STATE (SAFE + COMPLETE)
+    # 🧠 WORKFLOW STATE
     # ==========================================================
     input_state = WorkflowState(
         project_id=project_id,
         project_name=board_name,
 
-        # 🔥 SAFE TRELLO FIELDS (NO CRASH IN SLACK MODE)
         user_trello_key=os.getenv("TRELLO_API_KEY") if source == "trello" else "",
         user_trello_token=trello_token if source == "trello" else "",
 
@@ -156,9 +150,6 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     final_doc = result.get("improved_docs") or result.get("generated_docs", "")
     formatted_doc = clean_generated_doc(str(final_doc), board_name)
 
-    # ==========================================================
-    # 🛡 SAFETY FALLBACK
-    # ==========================================================
     if not formatted_doc.strip():
         formatted_doc = "No content generated."
 
@@ -216,7 +207,7 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     version = version_count + 1
 
     # ==========================================================
-    # 💾 SAVE TO DB
+    # 💾 SAVE TO DB (FIXED team_id STORAGE)
     # ==========================================================
     await docs_collection.insert_one({
         "user_id": user_id,
@@ -226,7 +217,10 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
         "generated_docs": formatted_doc,
         "board_name": board_name,
         "source": source,
-        "team_id": data.get("team_id"),
+
+        # 🔥 FIXED: always store correct team_id if Slack
+        "team_id": team_id if source == "slack" else None,
+
         "created_at": datetime.utcnow()
     })
 
