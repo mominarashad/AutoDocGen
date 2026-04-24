@@ -82,6 +82,10 @@ async def start_workflow(request: Request, payload: dict):
     db = request.app.state.db
 
     input_state = await build_state(payload, db)
+    input_state = dict(input_state)
+    input_state["source"] = payload.get("source")
+    input_state["team_id"] = payload.get("team_id")
+    input_state["template"] = payload.get("template")
 
     result = await workflow.ainvoke(input_state)
 
