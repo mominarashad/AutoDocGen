@@ -2,14 +2,13 @@ from fastapi import APIRouter, Request
 from app.graph.document_graph import workflow, WorkflowState
 from app.models.user_token_model import get_user_token
 from app.models.slack_model import get_slack_token
-from langgraph.types import Interrupt
 import os
 
 router = APIRouter(prefix="/workflow")
 
 
 # ------------------------------------------------------
-# 🧠 BUILD STATE (REPLACEMENT FOR MISSING FUNCTION)
+# 🧠 BUILD STATE
 # ------------------------------------------------------
 async def build_state(payload: dict, db):
 
@@ -74,8 +73,9 @@ async def build_state(payload: dict, db):
         feedback=""
     )
 
+
 # ------------------------------------------------------
-# 🚀 START WORKFLOW (WITH HUMAN LOOP)
+# 🚀 START WORKFLOW
 # ------------------------------------------------------
 @router.post("/start")
 async def start_workflow(request: Request, payload: dict):
@@ -91,6 +91,8 @@ async def start_workflow(request: Request, payload: dict):
             "final_doc": result.get("final_doc", "")
         }
     }
+
+
 # ------------------------------------------------------
 # 🔁 RESUME WORKFLOW
 # ------------------------------------------------------
@@ -113,5 +115,3 @@ async def resume_workflow(request: Request, payload: dict):
             "final_doc": result.get("final_doc", "")
         }
     }
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
