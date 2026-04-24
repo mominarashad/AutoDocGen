@@ -23,6 +23,7 @@ async def start_workflow(request: Request, payload: dict):
         return {"status": "error", "message": "Missing user_id or project_id"}
 
     pm_data = {}
+    token = None  # ✅ prevent undefined usage
 
     # ======================================================
     # 🔵 SLACK FLOW
@@ -31,7 +32,6 @@ async def start_workflow(request: Request, payload: dict):
         if not team_id:
             return {"status": "error", "message": "team_id required"}
 
-        from app.models.slack_model import get_slack_token
         from app.services.slack_service import fetch_channel_messages
 
         token = await get_slack_token(user_id, team_id, db)
@@ -59,9 +59,10 @@ async def start_workflow(request: Request, payload: dict):
     # 🟢 TRELLO FLOW
     # ======================================================
     else:
-        from app.models.user_token_model import get_user_token
-
         token = await get_user_token(user_id, db)
+
+        if not token:
+            return {"status": "error", "message": "Trello not connected"}
 
         pm_data = {
             "source": "trello",
@@ -69,7 +70,7 @@ async def start_workflow(request: Request, payload: dict):
         }
 
     # ======================================================
-    # 🧠 BUILD STATE (IMPORTANT)
+    # 🧠 BUILD STATE
     # ======================================================
     input_state = WorkflowState(
         project_id=project_id,
@@ -87,41 +88,18 @@ async def start_workflow(request: Request, payload: dict):
         feedback=""
     )
 
+    # ▶️ RUN WORKFLOW
     result = await workflow.ainvoke(input_state)
 
-   final_doc = (
-         result.get("final_doc")
-         or result.get("improved_docs")
-         or result.get("generated_docs")
-         or ""
-)
+    # ✅ FIXED INDENTATION HERE
+    final_doc = (
+        result.get("final_doc")
+        or result.get("improved_docs")
+        or result.get("generated_docs")
+        or ""
+    )
 
-    if "__interrupt__" in result:
-       return {
-           "status": "waiting_for_user",
-           "interrupt": result["__interrupt__"][0],
-           "state": result
-              }
-
-    return {
-        "status": "completed",
-        "data": {
-           "final_doc": final_doc   # ✅ ALWAYS RETURN THIS
-                }
-}
-# --------------------------------------
-# 🔁 RESUME WORKFLOW
-# --------------------------------------
-@router.post("/resume")
-async def resume_workflow(request: Request, payload: dict):
-    state = payload["state"]
-    user_input = payload["user_input"]
-
-    # 🔥 inject human response
-    state["__interrupt__"] = [user_input]
-
-    result = await workflow.ainvoke(state)
-
+    # ⛔ HUMAN INTERRUPT
     if "__interrupt__" in result:
         return {
             "status": "waiting_for_user",
@@ -129,7 +107,48 @@ async def resume_workflow(request: Request, payload: dict):
             "state": result
         }
 
+    # ✅ SUCCESS RESPONSE
     return {
         "status": "completed",
-        "data": result
+        "data": {
+            "final_doc": final_doc
+        }
+    }
+
+
+# --------------------------------------
+# 🔁 RESUME WORKFLOW
+# --------------------------------------
+@router.post("/resume")
+async def resume_workflow(request: Request, payload: dict):
+    state = payload.get("state")
+    user_input = payload.get("user_input")
+
+    if not state or user_input is None:
+        return {"status": "error", "message": "Missing state or user_input"}
+
+    # 🔥 inject human response
+    state["__interrupt__"] = [user_input]
+
+    result = await workflow.ainvoke(state)
+
+    # ⛔ STILL WAITING
+    if "__interrupt__" in result:
+        return {
+            "status": "waiting_for_user",
+            "interrupt": result["__interrupt__"][0],
+            "state": result
+        }
+
+    # ✅ COMPLETED
+    return {
+        "status": "completed",
+        "data": {
+            "final_doc": (
+                result.get("final_doc")
+                or result.get("improved_docs")
+                or result.get("generated_docs")
+                or ""
+            )
+        }
     }
