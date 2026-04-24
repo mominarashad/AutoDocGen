@@ -24,7 +24,9 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     pdf_headings = data.get("pdf_headings", [])
     selected_headings = data.get("selected_headings", [])
     template_name = str(data.get("template", "")).strip()
-    source = data.get("source") or "trello"
+    source = data.get("source")
+    if source not in ["slack", "trello"]:
+          raise ValueError(f"Invalid or missing source: {source}")
 
     if not template_name:
         return {"status": "error", "message": "Missing template name"}
