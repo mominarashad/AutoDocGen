@@ -11,7 +11,7 @@ router = APIRouter(prefix="/workflow")
 # ------------------------------------------------------
 # 🧠 BUILD STATE (REPLACEMENT FOR MISSING FUNCTION)
 # ------------------------------------------------------
-def build_state(payload: dict, db):
+async def build_state(payload: dict, db):
 
     user_id = payload.get("user_id")
     project_id = payload.get("project_id")
@@ -22,22 +22,19 @@ def build_state(payload: dict, db):
         raise ValueError("Missing user_id or project_id")
 
     pm_data = {}
-    token = ""
+    token = None
 
     # ---------------- SLACK ----------------
     if source == "slack":
-        from app.services.slack_service import fetch_channel_messages
-
-        token = None  # slack token is not reused as trello token
-
-        slack_token = None
-        import asyncio
-        slack_token = asyncio.run(get_slack_token(user_id, team_id, db))
+        slack_token = await get_slack_token(user_id, team_id, db)
 
         if not slack_token:
             raise ValueError("Slack not connected")
 
-        res = asyncio.run(fetch_channel_messages(slack_token, project_id))
+        from app.services.slack_service import fetch_channel_messages
+
+        res = await fetch_channel_messages(slack_token, project_id)
+
         messages = res.get("messages", [])
 
         conversation = "\n".join(
@@ -54,7 +51,10 @@ def build_state(payload: dict, db):
 
     # ---------------- TRELLO ----------------
     else:
-        token = asyncio.run(get_user_token(user_id, db))
+        token = await get_user_token(user_id, db)
+
+        if not token:
+            raise ValueError("Trello not connected")
 
         pm_data = {
             "source": "trello",
@@ -73,7 +73,6 @@ def build_state(payload: dict, db):
         generated_docs="",
         feedback=""
     )
-
 
 # ------------------------------------------------------
 # 🚀 START WORKFLOW (WITH HUMAN LOOP)
