@@ -81,30 +81,16 @@ async def build_state(payload: dict, db):
 async def start_workflow(request: Request, payload: dict):
     db = request.app.state.db
 
-    input_state = build_state(payload, db)
+    input_state = await build_state(payload, db)
 
-    try:
-        result = await workflow.ainvoke(input_state)
+    result = await workflow.ainvoke(input_state)
 
-        return {
-            "status": "completed",
-            "data": {
-                "final_doc": result.get("final_doc", "")
-            }
+    return {
+        "status": "completed",
+        "data": {
+            "final_doc": result.get("final_doc", "")
         }
-
-    except Exception as e:
-        # THIS is where interrupt comes
-        if "interrupt" in str(e).lower():
-            return {
-                "status": "waiting_for_user",
-                "interrupt": {
-                    "draft": input_state.get("draft_doc", "")
-                },
-                "state": input_state
-            }
-
-        return {"status": "error", "message": str(e)}
+    }
 # ------------------------------------------------------
 # 🔁 RESUME WORKFLOW
 # ------------------------------------------------------
@@ -119,15 +105,13 @@ async def resume_workflow(request: Request, payload: dict):
 
     state["reviewed_doc"] = user_input
 
-    try:
-        result = await workflow.ainvoke(state)
+    result = await workflow.ainvoke(state)
 
-        return {
-            "status": "completed",
-            "data": {
-                "final_doc": result.get("final_doc", "")
-            }
+    return {
+        "status": "completed",
+        "data": {
+            "final_doc": result.get("final_doc", "")
         }
-
+    }
     except Exception as e:
         return {"status": "error", "message": str(e)}
