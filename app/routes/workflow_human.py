@@ -85,34 +85,27 @@ async def start_workflow(request: Request, payload: dict):
     input_state = build_state(payload, db)
 
     try:
-        final_state = None
-
-        async for event in workflow.astream(input_state):
-
-            # 🚨 HUMAN INTERRUPT DETECTED
-            if isinstance(event, Interrupt):
-                return {
-                    "status": "waiting_for_user",
-                    "interrupt": event.value,
-                    "state": event.state
-                }
-
-            final_state = event
+        result = await workflow.ainvoke(input_state)
 
         return {
             "status": "completed",
             "data": {
-                "final_doc": final_state.get("final_doc", "")
+                "final_doc": result.get("final_doc", "")
             }
         }
 
     except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+        # THIS is where interrupt comes
+        if "interrupt" in str(e).lower():
+            return {
+                "status": "waiting_for_user",
+                "interrupt": {
+                    "draft": input_state.get("draft_doc", "")
+                },
+                "state": input_state
+            }
 
-
+        return {"status": "error", "message": str(e)}
 # ------------------------------------------------------
 # 🔁 RESUME WORKFLOW
 # ------------------------------------------------------
@@ -122,35 +115,20 @@ async def resume_workflow(request: Request, payload: dict):
     state = payload.get("state")
     user_input = payload.get("user_input")
 
-    if not state or user_input is None:
-        return {"status": "error", "message": "Missing state or user_input"}
+    if not state:
+        return {"status": "error", "message": "Missing state"}
 
-    # inject human response
-    state["__interrupt__"] = [user_input]
+    state["reviewed_doc"] = user_input
 
     try:
-        final_state = None
-
-        async for event in workflow.astream(state):
-
-            if isinstance(event, Interrupt):
-                return {
-                    "status": "waiting_for_user",
-                    "interrupt": event.value,
-                    "state": event.state
-                }
-
-            final_state = event
+        result = await workflow.ainvoke(state)
 
         return {
             "status": "completed",
             "data": {
-                "final_doc": final_state.get("final_doc", "")
+                "final_doc": result.get("final_doc", "")
             }
         }
 
     except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+        return {"status": "error", "message": str(e)}
