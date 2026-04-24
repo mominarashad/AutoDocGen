@@ -362,6 +362,8 @@ async def get_generated_doc(
             },
             db=db
         )
+        print("🔥 WORKFLOW REQUEST DATA:", data)
+        print("🔥 SOURCE IN REQUEST:", data.get("source"))
 
     return {
         "status": "success",
