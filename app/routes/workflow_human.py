@@ -23,7 +23,7 @@ async def start_workflow(request: Request, payload: dict):
         return {"status": "error", "message": "Missing user_id or project_id"}
 
     pm_data = {}
-    token = None  # ✅ prevent undefined usage
+    token = None
 
     # ======================================================
     # 🔵 SLACK FLOW
@@ -40,7 +40,6 @@ async def start_workflow(request: Request, payload: dict):
             return {"status": "error", "message": "Slack not connected"}
 
         res = await fetch_channel_messages(token, project_id)
-
         messages = res.get("messages", [])
 
         conversation = "\n".join(
@@ -75,12 +74,9 @@ async def start_workflow(request: Request, payload: dict):
     input_state = WorkflowState(
         project_id=project_id,
         project_name="",
-
         user_trello_key=os.getenv("TRELLO_API_KEY") if source == "trello" else "",
         user_trello_token=token if source == "trello" else "",
-
         pm_data=pm_data,
-
         uploaded_pdf_bytes=b"",
         pdf_headings=[],
         selected_headings=[],
@@ -91,15 +87,7 @@ async def start_workflow(request: Request, payload: dict):
     # ▶️ RUN WORKFLOW
     result = await workflow.ainvoke(input_state)
 
-    # ✅ FIXED INDENTATION HERE
-    final_doc = (
-        result.get("final_doc")
-        or result.get("improved_docs")
-        or result.get("generated_docs")
-        or ""
-    )
-
-    # ⛔ HUMAN INTERRUPT
+    # ❌ HUMAN INTERRUPT
     if "__interrupt__" in result:
         return {
             "status": "waiting_for_user",
@@ -107,7 +95,14 @@ async def start_workflow(request: Request, payload: dict):
             "state": result
         }
 
-    # ✅ SUCCESS RESPONSE
+    # ✅ FINAL OUTPUT
+    final_doc = (
+        result.get("final_doc")
+        or result.get("improved_docs")
+        or result.get("generated_docs")
+        or ""
+    )
+
     return {
         "status": "completed",
         "data": {
@@ -130,9 +125,10 @@ async def resume_workflow(request: Request, payload: dict):
     # 🔥 inject human response
     state["__interrupt__"] = [user_input]
 
+    # ▶️ RUN WORKFLOW AGAIN
     result = await workflow.ainvoke(state)
 
-    # ⛔ STILL WAITING
+    # ❌ STILL WAITING FOR HUMAN
     if "__interrupt__" in result:
         return {
             "status": "waiting_for_user",
@@ -140,15 +136,17 @@ async def resume_workflow(request: Request, payload: dict):
             "state": result
         }
 
-    # ✅ COMPLETED
+    # ✅ FINAL OUTPUT (same logic as /start)
+    final_doc = (
+        result.get("final_doc")
+        or result.get("improved_docs")
+        or result.get("generated_docs")
+        or ""
+    )
+
     return {
         "status": "completed",
         "data": {
-            "final_doc": (
-                result.get("final_doc")
-                or result.get("improved_docs")
-                or result.get("generated_docs")
-                or ""
-            )
+            "final_doc": final_doc
         }
     }
