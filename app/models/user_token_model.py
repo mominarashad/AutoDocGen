@@ -15,11 +15,14 @@ async def save_user_token(user_id: str, trello_token: str, db: AsyncIOMotorDatab
     )
 
 async def get_user_token(user_id, db):
-    user = await db["tokens"].find_one({"user_id": user_id})  # <-- correct collection
+    user = await db["tokens"].find_one({
+        "user_id": str(user_id)
+    })
+
     if not user:
-        print(f"❌ get_user_token: no token found for {user_id}")
+        print(f"❌ no token for {user_id}")
         return None
-    print(f"✅ get_user_token: token found for {user_id}")
+
     return user.get("trello_token")
 
 
