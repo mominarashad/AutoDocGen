@@ -89,17 +89,26 @@ async def start_workflow(request: Request, payload: dict):
 
     result = await workflow.ainvoke(input_state)
 
+   final_doc = (
+         result.get("final_doc")
+         or result.get("improved_docs")
+         or result.get("generated_docs")
+         or ""
+)
+
     if "__interrupt__" in result:
-        return {
-            "status": "waiting_for_user",
-            "interrupt": result["__interrupt__"][0],
-            "state": result
-        }
+       return {
+           "status": "waiting_for_user",
+           "interrupt": result["__interrupt__"][0],
+           "state": result
+              }
 
     return {
         "status": "completed",
-        "data": result
-    }
+        "data": {
+           "final_doc": final_doc   # ✅ ALWAYS RETURN THIS
+                }
+}
 # --------------------------------------
 # 🔁 RESUME WORKFLOW
 # --------------------------------------
