@@ -26,22 +26,11 @@ async def save_slack_token(user_id: str, team_id: str, access_token: str, db):
 # -----------------------------
 # GET SLACK TOKEN (IMPROVED)
 # -----------------------------
-async def get_slack_token(user_id: str, team_id: str, db):
-
+async def get_slack_token(user_id, team_id, db):
     doc = await db["slack_connections"].find_one({
         "user_id": str(user_id),
         "team_id": str(team_id)
     })
-
     if not doc:
-        print(f"❌ Slack token not found | user={user_id} team={team_id}")
         return None
-
-    token = doc.get("access_token")
-
-    if not token:
-        print(f"❌ Slack token missing in doc | user={user_id} team={team_id}")
-        return None
-
-    print(f"✅ Slack token found for team={team_id}")
-    return token
+    return doc.get("access_token")
