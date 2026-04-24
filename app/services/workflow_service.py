@@ -47,8 +47,7 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     if source == "slack":
         print("✅ Slack flow triggered")
 
-        team_id = data.get("team_id")
-
+        team_id = data.get("team_id") or data.get("teamId")
         if not team_id:
             return {
                 "status": "error",
