@@ -1,9 +1,7 @@
-# app/graph/nodes/human_review_node.py
-
 from langgraph.types import interrupt
 
 def human_review_node(state):
-    # If already reviewed, skip
+
     if state.get("reviewed_doc"):
         return state
 
