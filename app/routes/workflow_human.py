@@ -17,6 +17,7 @@ async def build_state(payload: dict, db):
     project_id = payload.get("project_id")
     source = payload.get("source")
     team_id = payload.get("team_id")
+    template = payload.get("template", "")
 
     if not source:
         source = "trello" if payload.get("board_id") else "slack"
@@ -79,10 +80,11 @@ async def build_state(payload: dict, db):
 
 
 # ------------------------------------------------------
-# 🚀 START WORKFLOW (PAUSE ENABLED)
+# 🚀 START WORKFLOW (FIXED INTERRUPT HANDLING)
 # ------------------------------------------------------
 @router.post("/start")
 async def start_workflow(request: Request, payload: dict):
+
     db = request.app.state.db
 
     user_id = payload.get("user_id")
@@ -97,27 +99,33 @@ async def start_workflow(request: Request, payload: dict):
         }
     }
 
+    # ✅ FIX: proper LangGraph streaming pattern
     async for event in workflow.astream(input_state, config=config):
 
-        if "__interrupt__" in event:
+        # 🔥 FIXED SAFE CHECK (important)
+        if isinstance(event, dict) and "__interrupt__" in event:
+
             interrupt = event["__interrupt__"][0]
 
             return {
                 "status": "waiting_for_user",
-                "interrupt": interrupt,
-                "state": interrupt.value
+                "interrupt": {
+                    "value": interrupt.value,
+                    "id": getattr(interrupt, "id", None)
+                },
+                "state": input_state
             }
 
     return {
         "status": "completed",
         "data": {
-            "final_doc": input_state.get("final_doc", "")
+            "final_doc": input_state.get("generated_docs", "")
         }
     }
 
 
 # ------------------------------------------------------
-# 🔁 RESUME WORKFLOW (FIXED)
+# 🔁 RESUME WORKFLOW (CORRECT HITL PATTERN)
 # ------------------------------------------------------
 @router.post("/resume")
 async def resume_workflow(request: Request, payload: dict):
@@ -128,12 +136,12 @@ async def resume_workflow(request: Request, payload: dict):
     if not state:
         return {"status": "error", "message": "Missing state"}
 
-    # 🔴 ONLY attach input (repo pattern)
-    state["reviewed_doc"] = user_input
-
     user_id = state.get("user_id")
     project_id = state.get("project_id")
     template = state.get("template")
+
+    if not user_id or not project_id or not template:
+        return {"status": "error", "message": "Invalid state keys"}
 
     config = {
         "configurable": {
@@ -141,7 +149,11 @@ async def resume_workflow(request: Request, payload: dict):
         }
     }
 
-    result = await workflow.ainvoke(state, config=config)
+    # ✅ FIX: correct HITL resume pattern (LangGraph standard)
+    result = await workflow.ainvoke(
+        Command(resume=user_input),
+        config=config
+    )
 
     return {
         "status": "completed",
