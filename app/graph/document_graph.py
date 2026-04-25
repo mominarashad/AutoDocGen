@@ -6,7 +6,17 @@ from typing import TypedDict, List, Dict
 from app.graph.nodes.doc_draft_node import create_draft_node
 from app.graph.nodes.human_review_node import human_review_node
 from app.graph.nodes.doc_finalize_node import finalize_doc_node
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.mongodb import MongoDBSaver
+from motor.motor_asyncio import AsyncIOMotorClient
+import os
+
+mongo_client = AsyncIOMotorClient(os.getenv("MONGODB_URI"))
+
+checkpointer = MongoDBSaver(
+    mongo_client,
+    db_name="Doc_Gen",
+    collection_name="workflow_checkpoints"
+)
 
 class WorkflowState(TypedDict, total=False):
     project_id: str
