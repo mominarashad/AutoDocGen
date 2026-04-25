@@ -5,6 +5,7 @@ from app.models.user_token_model import get_user_token
 from app.models.slack_model import get_slack_token
 from app.services.slack_service import fetch_channel_messages
 from datetime import datetime
+from langgraph.types import Interrupt
 import os
 
 router = APIRouter(prefix="/workflow")
@@ -74,11 +75,12 @@ async def build_state(payload: dict, db):
 # ------------------------------------------------------
 # 🚀 START WORKFLOW
 # ------------------------------------------------------
+
+
 @router.post("/start")
 async def start_workflow(request: Request, payload: dict):
 
     db = request.app.state.db
-
     state = await build_state(payload, db)
 
     config = {
@@ -87,23 +89,26 @@ async def start_workflow(request: Request, payload: dict):
         }
     }
 
-    async for event in workflow.astream(state, config=config):
+    result = await workflow.ainvoke(state, config=config)
 
-        if isinstance(event, dict) and "__interrupt__" in event:
+    # ==================================================
+    # 🔥 CHECK IF INTERRUPT EXISTS IN RESULT
+    # ==================================================
+    if isinstance(result, dict) and result.get("__interrupt__"):
+        interrupt = result["__interrupt__"][0]
 
-            interrupt = event["__interrupt__"][0]
+        return {
+            "status": "waiting_for_user",
+            "interrupt": {
+                "value": interrupt.value,
+                "id": getattr(interrupt, "id", None)
+            }
+        }
 
-            return {
-                  "status": "waiting_for_user",
-                  "interrupt": {
-                        "value": interrupt.value,
-                        "id": getattr(interrupt, "id", None)
-                      }
-                    }
-
-    return {"status": "error", "message": "No interrupt triggered"}
-
-
+    return {
+        "status": "completed",
+        "result": result
+    }
 # ------------------------------------------------------
 # 🔁 RESUME WORKFLOW
 # ------------------------------------------------------
