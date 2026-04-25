@@ -28,7 +28,8 @@ class WorkflowState(TypedDict, total=False):
     draft_doc: str              # AI generated draft
     reviewed_doc: str           # human edited version
     final_doc: str              # final output
-
+    generated_docs: str
+    
 
 graph = StateGraph(WorkflowState)
 checkpointer = MemorySaver()
