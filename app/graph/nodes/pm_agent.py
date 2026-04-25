@@ -2,9 +2,9 @@ import httpx
 
 
 # --------------------------------------------------
-# Resolve board name → board ID (TRELLO ONLY)
+# Resolve board name → board ID (SYNC VERSION)
 # --------------------------------------------------
-async def get_board_id_from_name(
+def get_board_id_from_name(
     trello_key: str,
     trello_token: str,
     board_name: str
@@ -20,8 +20,8 @@ async def get_board_id_from_name(
         "fields": "id,name"
     }
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.get(url, params=params)
+    with httpx.Client(timeout=30) as client:
+        res = client.get(url, params=params)
 
     if res.status_code != 200:
         raise ValueError(f"Trello API error {res.status_code}: {res.text}")
@@ -34,7 +34,7 @@ async def get_board_id_from_name(
 
 
 # --------------------------------------------------
-# PM Agent Node (FULLY SAFE MULTI-SOURCE)
+# PM Agent Node (FULLY SYNC SAFE)
 # --------------------------------------------------
 def fetch_pm_data_node(state: dict) -> dict:
 
@@ -42,23 +42,21 @@ def fetch_pm_data_node(state: dict) -> dict:
     source = pm_data.get("source")
 
     # ==========================================================
-    # 🔥 HARD SAFETY: NEVER DEFAULT TO TRELLO
+    # 🔥 HARD SAFETY
     # ==========================================================
     if not source:
         raise ValueError("pm_data.source is missing (must be 'slack' or 'trello')")
 
     # ==========================================================
-    # 🔵 SLACK FLOW (STRICT ISOLATION)
+    # 🔵 SLACK FLOW
     # ==========================================================
     if source == "slack":
         print("✅ Slack detected → bypassing Trello completely")
-
-        # pass-through (already prepared in execute_workflow)
         state["pm_data"] = pm_data
         return state
 
     # ==========================================================
-    # 🟢 TRELLO FLOW ONLY
+    # 🟢 TRELLO FLOW
     # ==========================================================
     if source != "trello":
         raise ValueError(f"Unknown source: {source}")
@@ -69,7 +67,6 @@ def fetch_pm_data_node(state: dict) -> dict:
     project_id = state.get("project_id") or state.get("board_id")
     project_name = state.get("project_name")
 
-    # 🔥 VALIDATE ONLY IN TRELLO MODE
     if not trello_key:
         raise ValueError("TRELLO_API_KEY missing in workflow state")
 
@@ -85,14 +82,14 @@ def fetch_pm_data_node(state: dict) -> dict:
     if project_id and len(project_id) == 24:
         board_id = project_id
     else:
-        board_id = await get_board_id_from_name(
+        board_id = get_board_id_from_name(
             trello_key,
             trello_token,
             project_name
         )
 
     # --------------------------------------------------
-    # Fetch Trello cards
+    # Fetch Trello cards (SYNC)
     # --------------------------------------------------
     url = f"https://api.trello.com/1/boards/{board_id}/cards"
     params = {
@@ -101,8 +98,8 @@ def fetch_pm_data_node(state: dict) -> dict:
         "fields": "id,name,desc,idList"
     }
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.get(url, params=params)
+    with httpx.Client(timeout=30) as client:
+        res = client.get(url, params=params)
 
     if res.status_code != 200:
         raise ValueError(f"Trello cards fetch failed: {res.text}")
