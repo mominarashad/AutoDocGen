@@ -89,25 +89,25 @@ async def start_workflow(request: Request, payload: dict):
         }
     }
 
-    result = await workflow.ainvoke(state, config=config)
+    async for event in workflow.astream(state, config=config):
 
-    # ==================================================
-    # 🔥 CHECK IF INTERRUPT EXISTS IN RESULT
-    # ==================================================
-    if isinstance(result, dict) and result.get("__interrupt__"):
-        interrupt = result["__interrupt__"][0]
+        # ==================================================
+        # 🔥 PROPER INTERRUPT HANDLING (THIS IS THE FIX)
+        # ==================================================
+        if "__interrupt__" in event:
 
-        return {
-            "status": "waiting_for_user",
-            "interrupt": {
-                "value": interrupt.value,
-                "id": getattr(interrupt, "id", None)
+            interrupt = event["__interrupt__"][0]
+
+            return {
+                "status": "waiting_for_user",
+                "interrupt": {
+                    "value": interrupt.value,
+                    "id": getattr(interrupt, "id", None)
+                }
             }
-        }
 
     return {
-        "status": "completed",
-        "result": result
+        "status": "completed"
     }
 # ------------------------------------------------------
 # 🔁 RESUME WORKFLOW
