@@ -26,12 +26,56 @@ class WorkflowState(TypedDict, total=False):
     reviewed_doc: str
     final_doc: str
 
+
 graph = StateGraph(WorkflowState)
 
-graph.add_node("pm_agent", fetch_pm_data_node)
-graph.add_node("doc_draft", create_docs_node)
-graph.add_node("human_review", human_review_node)
-graph.add_node("doc_finalize", finalize_doc_node)
+# =====================================================
+# 🔥 DEBUG WRAPPERS (IMPORTANT)
+# =====================================================
+
+async def debug_pm_agent(state):
+    print("\n🔥 [DEBUG] ENTER pm_agent")
+    print("STATE:", state)
+    result = await fetch_pm_data_node(state)
+    print("🔥 [DEBUG] EXIT pm_agent")
+    return result
+
+
+async def debug_doc_draft(state):
+    print("\n🔥 [DEBUG] ENTER doc_draft")
+    print("pm_data exists:", bool(state.get("pm_data")))
+    result = await create_docs_node(state)
+    print("🔥 [DEBUG] EXIT doc_draft")
+    return result
+
+
+async def debug_human_review(state):
+    print("\n🔥 [DEBUG] ENTER human_review")
+    print("draft_doc length:", len(state.get("draft_doc", "")))
+
+    result = await human_review_node(state)
+
+    print("🔥 [DEBUG] INTERRUPT TRIGGERED")
+    print("VALUE:", result)
+
+    return result
+
+
+async def debug_finalize(state):
+    print("\n🔥 [DEBUG] ENTER finalize")
+    result = await finalize_doc_node(state)
+    print("🔥 [DEBUG] EXIT finalize")
+    return result
+
+
+# =====================================================
+# GRAPH BUILD
+# =====================================================
+
+graph.add_node("pm_agent", debug_pm_agent)
+graph.add_node("doc_draft", debug_doc_draft)
+graph.add_node("human_review", debug_human_review)
+graph.add_node("doc_finalize", debug_finalize)
 
 graph.add_edge(START, "pm_agent")
 graph.add_edge("pm_agent", "doc_draft")
@@ -40,3 +84,5 @@ graph.add_edge("human_review", "doc_finalize")
 graph.add_edge("doc_finalize", END)
 
 workflow = graph.compile(checkpointer=checkpointer)
+
+print("🔥 GRAPH COMPILED WITH DEBUG MODE")
