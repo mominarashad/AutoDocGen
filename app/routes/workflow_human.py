@@ -128,12 +128,12 @@ async def resume_workflow(request: Request, payload: dict):
     if not state:
         return {"status": "error", "message": "Missing state"}
 
+    # 🔴 ONLY attach input (repo pattern)
+    state["reviewed_doc"] = user_input
+
     user_id = state.get("user_id")
     project_id = state.get("project_id")
     template = state.get("template")
-
-    if not user_id or not project_id or not template:
-        return {"status": "error", "message": "Invalid state metadata"}
 
     config = {
         "configurable": {
@@ -141,17 +141,11 @@ async def resume_workflow(request: Request, payload: dict):
         }
     }
 
-    # ======================================================
-    # ✅ FIX: PROPER LANGGRAPH RESUME (NO STATE MUTATION)
-    # ======================================================
-    result = await workflow.ainvoke(
-        Command(resume=user_input),
-        config=config
-    )
+    result = await workflow.ainvoke(state, config=config)
 
     return {
         "status": "completed",
         "data": {
-            "final_doc": result.get("final_doc")
+            "final_doc": result.get("final_doc", "")
         }
     }
