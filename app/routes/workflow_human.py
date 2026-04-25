@@ -150,8 +150,10 @@ async def resume_workflow(request: Request, payload: dict):
         }
     }
 
-    # ✅ continue workflow normally
-    result = await workflow.ainvoke(state, config=config)
+    result = await workflow.ainvoke(
+    Command(resume=user_input),
+    config=config
+)
 
     final_doc = (
     result.get("final_doc")
