@@ -43,11 +43,23 @@ async def debug_pm_agent(state):
 
 async def debug_doc_draft(state):
     print("\n🔥 [DEBUG] ENTER doc_draft")
-    print("pm_data exists:", bool(state.get("pm_data")))
-    result = await create_docs_node(state)
-    print("🔥 [DEBUG] EXIT doc_draft")
-    return result
+    print("STATE KEYS:", list(state.keys()))
+    print("PM DATA:", state.get("pm_data"))
 
+    try:
+        result = await create_docs_node(state)
+        print("🔥 [DEBUG] EXIT doc_draft SUCCESS")
+        return result
+
+    except Exception as e:
+        print("\n❌❌❌ DOC_DRAFT CRASH ❌❌❌")
+        print("ERROR TYPE:", type(e))
+        print("ERROR:", str(e))
+
+        import traceback
+        traceback.print_exc()
+
+        raise
 
 async def debug_human_review(state):
     print("\n🔥 [DEBUG] ENTER human_review")
