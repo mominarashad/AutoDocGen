@@ -70,3 +70,25 @@ async def get_docs_by_board(
         "count": len(docs),
         "documents": docs
     }
+
+@router.get("/result")
+async def get_result(user_id: str, project_id: str, template_name: str, request: Request):
+
+    db = request.app.state.db
+
+    doc = await db["generated_docs"].find_one(
+        {
+            "user_id": user_id,
+            "project_id": project_id,
+            "template_name": template_name
+        },
+        sort=[("version", -1)]
+    )
+
+    if not doc:
+        return {"status": "not_found"}
+
+    return {
+        "status": "success",
+        "generated_docs": doc["generated_docs"]
+    }
