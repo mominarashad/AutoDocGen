@@ -137,8 +137,7 @@ async def resume_workflow(request: Request, payload: dict):
     if not state:
         return {"status": "error", "message": "Missing state"}
 
-    # ✅ inject user response into state
-    state["reviewed_doc"] = user_input
+    
 
     user_id = state.get("user_id")
     project_id = state.get("project_id")
