@@ -36,7 +36,7 @@ async def get_board_id_from_name(
 # --------------------------------------------------
 # PM Agent Node (FULLY SAFE MULTI-SOURCE)
 # --------------------------------------------------
- def fetch_pm_data_node(state: dict) -> dict:
+def fetch_pm_data_node(state: dict) -> dict:
 
     pm_data = state.get("pm_data") or {}
     source = pm_data.get("source")
