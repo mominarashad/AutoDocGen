@@ -1,14 +1,13 @@
 from langgraph.types import interrupt
 
 def human_review_node(state):
+    """
+    HITL pause point (as per official LangGraph HITL pattern)
+    """
+
     draft = state.get("draft_doc", "")
 
-    user_feedback = interrupt({
-        "draft": draft,
-        "message": "Review and edit the document"
+    # 🔴 THIS CREATES THE PAUSE (same as repo)
+    return interrupt({
+        "draft_doc": draft
     })
-
-    return {
-        **state,
-        "reviewed_doc": user_feedback
-    }
