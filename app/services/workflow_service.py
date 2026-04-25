@@ -44,23 +44,23 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     board_name = ""
     trello_token = None
 
+    team_id = None  # 🔥 ensure safe global availability
+
     # ==========================================================
     # 🔵 SLACK FLOW
     # ==========================================================
     if source == "slack":
         print("✅ Slack flow triggered")
 
-        # 🔥 FIX: robust team_id handling
         team_id = (
             data.get("team_id")
             or data.get("teamId")
-            or os.environ.get("TEAM_ID")  # optional fallback safety
+            or os.environ.get("TEAM_ID")
         )
 
         if not team_id:
             raise ValueError("🔥 CRITICAL: team_id is required for Slack flow")
 
-        # 🔑 GET SLACK TOKEN FROM DB
         slack_token = await get_slack_token(user_id, team_id, db)
 
         print("TOKEN EXISTS:", bool(slack_token))
@@ -71,11 +71,9 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
                 "message": "Slack workspace not connected"
             }
 
-        # 🚀 JOIN CHANNEL
         join_res = await join_channel(slack_token, project_id)
         print("🧪 JOIN RESPONSE:", join_res)
 
-        # 📥 FETCH MESSAGES
         messages_res = await fetch_channel_messages(slack_token, project_id)
         print("🧪 FETCH RESPONSE:", messages_res)
 
@@ -148,14 +146,18 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     # 🚀 RUN WORKFLOW
     # ==========================================================
     config = {
-    "configurable": {
-        "thread_id": f"{user_id}_{project_id}_{template_name}"
-         }
-               }
+        "configurable": {
+            "thread_id": f"{user_id}_{project_id}_{template_name}"
+        }
+    }
 
     result = await workflow.ainvoke(input_state, config=config)
 
-    final_doc = result.get("improved_docs") or result.get("generated_docs", "")
+    # ==========================================================
+    # ✅ FIX APPLIED HERE (FINAL DOC PRIORITY)
+    # ==========================================================
+    final_doc = result.get("final_doc") or result.get("generated_docs", "")
+
     formatted_doc = clean_generated_doc(str(final_doc), board_name)
 
     if not formatted_doc.strip():
@@ -215,7 +217,7 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     version = version_count + 1
 
     # ==========================================================
-    # 💾 SAVE TO DB (FIXED team_id STORAGE)
+    # 💾 SAVE TO DB (FIXED OUTPUT)
     # ==========================================================
     await docs_collection.insert_one({
         "user_id": user_id,
@@ -226,7 +228,6 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
         "board_name": board_name,
         "source": source,
 
-        # 🔥 FIXED: always store correct team_id if Slack
         "team_id": team_id if source == "slack" else None,
 
         "created_at": datetime.utcnow()
