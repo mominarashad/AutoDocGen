@@ -24,3 +24,4 @@ PyPDF2
 pymupdf
 matplotlib
 gradio
+langgraph-checkpoint-mongodb
