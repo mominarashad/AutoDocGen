@@ -66,18 +66,19 @@ async def build_state(payload: dict, db):
         }
 
     return WorkflowState(
-        project_id=project_id,
-        project_name="",
-        user_trello_key=os.getenv("TRELLO_API_KEY") if source == "trello" else "",
-        user_trello_token=token if source == "trello" else "",
-        pm_data=pm_data,
-        uploaded_pdf_bytes=b"",
-        pdf_headings=[],
-        selected_headings=[],
-        generated_docs="",
-        feedback=""
-    )
-
+    project_id=project_id,
+    project_name="",
+    user_id=user_id,              # ✅ ADD THIS
+    template=template,            # ✅ ADD THIS
+    user_trello_key=os.getenv("TRELLO_API_KEY") if source == "trello" else "",
+    user_trello_token=token if source == "trello" else "",
+    pm_data=pm_data,
+    uploaded_pdf_bytes=b"",
+    pdf_headings=[],
+    selected_headings=[],
+    generated_docs="",
+    feedback=""
+)
 
 # ------------------------------------------------------
 # 🚀 START WORKFLOW (FIXED INTERRUPT HANDLING)
@@ -136,12 +137,12 @@ async def resume_workflow(request: Request, payload: dict):
     if not state:
         return {"status": "error", "message": "Missing state"}
 
+    # ✅ inject user response into state
+    state["reviewed_doc"] = user_input
+
     user_id = state.get("user_id")
     project_id = state.get("project_id")
     template = state.get("template")
-
-    if not user_id or not project_id or not template:
-        return {"status": "error", "message": "Invalid state keys"}
 
     config = {
         "configurable": {
@@ -149,15 +150,12 @@ async def resume_workflow(request: Request, payload: dict):
         }
     }
 
-    # ✅ FIX: correct HITL resume pattern (LangGraph standard)
-    result = await workflow.ainvoke(
-        Command(resume=user_input),
-        config=config
-    )
+    # ✅ continue workflow normally
+    result = await workflow.ainvoke(state, config=config)
 
     return {
         "status": "completed",
         "data": {
-            "final_doc": result.get("final_doc", "")
+            "final_doc": result.get("generated_docs", "") or result.get("final_doc", "")
         }
     }
