@@ -1,7 +1,14 @@
-from langgraph.types import interrupt
-
 def human_review_node(state):
-    return interrupt({
-        "draft_doc": state.get("draft_doc"),
-        "message": "Edit the document and submit"
-    })
+    if state.get("reviewed_doc"):
+        print("✅ Review already done → skipping interrupt")
+        return state
+
+    return {
+        "__interrupt__": [{
+            "id": "review_1",
+            "value": {
+                "message": "Review generated document",
+                "draft_doc": state.get("final_doc")
+            }
+        }]
+    }
