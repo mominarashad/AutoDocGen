@@ -1,16 +1,14 @@
 from langgraph.types import interrupt
 
 def human_review_node(state):
-    if state.get("reviewed_doc"):
-        return state
+    draft = state.get("draft_doc", "")
 
-    review = interrupt({
-        "type": "review_document",
-        "message": "Edit or approve the document",
-        "draft": state.get("draft_doc", "")
+    user_feedback = interrupt({
+        "draft": draft,
+        "message": "Review and edit the document"
     })
 
     return {
         **state,
-        "reviewed_doc": review
+        "reviewed_doc": user_feedback
     }
