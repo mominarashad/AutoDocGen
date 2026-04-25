@@ -1,17 +1,23 @@
-# app/graph/nodes/doc_draft_node.py
-
 def create_draft_node(state):
     pm_data = state.get("pm_data", {})
+    feedback = state.get("reviewed_doc")
 
-    draft = f"""
-Project Overview:
-{pm_data}
+    if feedback:
+        draft = f"""
+        Regenerated Document (based on feedback):
+        Feedback:
+        {feedback}
 
-(Generated draft — user can edit)
-"""
-
-    print("🔥 DOC_DRAFT GENERATED")
+        Original Data:
+        {pm_data}
+        """
+    else:
+        draft = f"""
+        Initial Draft:
+        {pm_data}
+        """
 
     return {
+        **state,
         "draft_doc": draft
     }
