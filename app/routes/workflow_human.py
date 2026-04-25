@@ -153,13 +153,15 @@ async def resume_workflow(request: Request, payload: dict):
     # ✅ continue workflow normally
     result = await workflow.ainvoke(state, config=config)
 
-    return {
-        "status": "completed",
-        "data": {
-            final_doc = (
+    final_doc = (
     result.get("final_doc")
     or result.get("generated_docs")
     or ""
 )
-        }
+
+    return {
+    "status": "completed",
+    "data": {
+        "final_doc": final_doc
     }
+}
