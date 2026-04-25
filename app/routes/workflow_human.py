@@ -96,18 +96,22 @@ async def start_workflow(request: Request, payload: dict):
 
         # 🔥 INTERUPT DETECTION
         if "__interrupt__" in event:
-            interrupt = event["__interrupt__"][0]
+           interrupt = event["__interrupt__"][0]
 
-            return {
-                "status": "waiting_for_user",
-                "interrupt": {
-                    "value": interrupt.value,
-                    "id": getattr(interrupt, "id", None)
-                }
+           print("🧠 INTERRUPT VALUE:", interrupt.value)
+
+           return {
+              "status": "waiting_for_user",
+              "interrupt": {
+                   "id": getattr(interrupt, "id", None),
+
+            # 🔥 THIS IS CRITICAL
+                  "value": {
+                    "message": interrupt.value.get("message"),
+                    "draft_doc": interrupt.value.get("draft_doc")
             }
-
-        # normal completion fallback
-        result = event
+        }
+    }
 
     return {
         "status": "completed",
@@ -130,8 +134,11 @@ async def resume_workflow(request: Request, payload: dict):
         }
     }
 
+    # ✅ inject reviewed_doc into state
     result = await workflow.ainvoke(
-        Command(resume=user_input),
+        Command(update={
+            "reviewed_doc": user_input
+        }),
         config=config
     )
 
