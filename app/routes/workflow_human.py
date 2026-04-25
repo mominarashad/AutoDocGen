@@ -89,28 +89,29 @@ async def start_workflow(request: Request, payload: dict):
         }
     }
 
+    # ✅ FIX: use stream instead of invoke
     async for event in workflow.astream(state, config=config):
 
-        # ==================================================
-        # 🔥 PROPER INTERRUPT CAPTURE
-        # ==================================================
-        if "__interrupt__" in event:
+        print("🔥 EVENT:", event)
 
-            interrupt_obj = event["__interrupt__"][0]
+        # 🔥 INTERUPT DETECTION
+        if "__interrupt__" in event:
+            interrupt = event["__interrupt__"][0]
 
             return {
                 "status": "waiting_for_user",
                 "interrupt": {
-                    "value": interrupt_obj.value,
-                    "id": getattr(interrupt_obj, "id", None)
+                    "value": interrupt.value,
+                    "id": getattr(interrupt, "id", None)
                 }
             }
 
-        # optional: debug logs
-        print("EVENT:", event)
+        # normal completion fallback
+        result = event
 
     return {
-        "status": "completed"
+        "status": "completed",
+        "result": result
     }
 # ------------------------------------------------------
 # 🔁 RESUME WORKFLOW
