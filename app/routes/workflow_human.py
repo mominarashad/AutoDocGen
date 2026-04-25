@@ -94,10 +94,12 @@ async def start_workflow(request: Request, payload: dict):
             interrupt = event["__interrupt__"][0]
 
             return {
-                "status": "waiting_for_user",
-                "interrupt": interrupt.value,
-                "thread_id": config["configurable"]["thread_id"]
-            }
+                  "status": "waiting_for_user",
+                  "interrupt": {
+                        "value": interrupt.value,
+                        "id": getattr(interrupt, "id", None)
+                      }
+                    }
 
     return {"status": "error", "message": "No interrupt triggered"}
 
@@ -108,20 +110,14 @@ async def start_workflow(request: Request, payload: dict):
 @router.post("/resume")
 async def resume_workflow(request: Request, payload: dict):
 
-    db = request.app.state.db
-
-    thread_id = payload.get("thread_id")
     user_input = payload.get("user_input")
     user_id = payload.get("user_id")
     project_id = payload.get("project_id")
     template = payload.get("template")
 
-    if not thread_id:
-        return {"status": "error", "message": "Missing thread_id"}
-
     config = {
         "configurable": {
-            "thread_id": thread_id
+            "thread_id": f"{user_id}_{project_id}_{template}"
         }
     }
 
@@ -130,19 +126,11 @@ async def resume_workflow(request: Request, payload: dict):
         config=config
     )
 
-    final_doc = result.get("final_doc", "")
-
-    # ✅ SAVE TO DB HERE (ONLY HERE)
-    await db["generated_docs"].insert_one({
-        "user_id": user_id,
-        "project_id": project_id,
-        "template_name": template,
-        "version": 1,
-        "generated_docs": final_doc,
-        "created_at": datetime.utcnow()
-    })
+    final_doc = result.get("final_doc") or ""
 
     return {
         "status": "completed",
-        "final_doc": final_doc
+        "data": {
+            "final_doc": final_doc
+        }
     }
