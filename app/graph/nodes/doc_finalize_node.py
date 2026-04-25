@@ -1,15 +1,14 @@
-# app/graph/nodes/doc_finalize_node.py
-
 def finalize_doc_node(state):
     content = state.get("reviewed_doc") or state.get("draft_doc")
 
     final = f"""
-    FINAL DOCUMENT
+FINAL DOCUMENT
 
-    {content}
-    """
+{content}
+""".strip()
 
     return {
         **state,
-        "final_doc": final
+        "final_doc": final,
+        "generated_docs": final   # 🔥 ADD THIS (CRITICAL FOR DB/UI SYNC)
     }
