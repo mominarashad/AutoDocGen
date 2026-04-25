@@ -15,9 +15,10 @@ async def build_state(payload: dict, db):
     user_id = payload.get("user_id")
     project_id = payload.get("project_id")
     source = payload.get("source")
+    team_id = payload.get("team_id")
+
     if not source:
         source = "trello" if payload.get("board_id") else "slack"
-    team_id = payload.get("team_id")
 
     if not user_id or not project_id:
         raise ValueError("Missing user_id or project_id")
@@ -77,24 +78,43 @@ async def build_state(payload: dict, db):
 
 
 # ------------------------------------------------------
-# 🚀 START WORKFLOW
+# 🚀 START WORKFLOW (PAUSE ENABLED)
 # ------------------------------------------------------
 @router.post("/start")
 async def start_workflow(request: Request, payload: dict):
     db = request.app.state.db
 
+    user_id = payload.get("user_id")
+    project_id = payload.get("project_id")
+    template = payload.get("template")
+
     input_state = await build_state(payload, db)
-    input_state = dict(input_state)
-    input_state["source"] = payload.get("source")
-    input_state["team_id"] = payload.get("team_id")
-    input_state["template"] = payload.get("template")
 
-    result = await workflow.ainvoke(input_state)
+    # 🔥 CRITICAL FIX: thread_id
+    config = {
+        "configurable": {
+            "thread_id": f"{user_id}_{project_id}_{template}"
+        }
+    }
 
+    # 🔥 Use stream instead of invoke
+    async for event in workflow.astream(input_state, config=config):
+
+        # 👉 interruption point
+        if "__interrupt__" in event:
+            interrupt = event["__interrupt__"][0]
+
+            return {
+                "status": "waiting_for_user",
+                "interrupt": interrupt,
+                "state": interrupt.value   # send state back
+            }
+
+    # fallback (if no interruption)
     return {
         "status": "completed",
         "data": {
-            "final_doc": result.get("final_doc", "")
+            "final_doc": input_state.get("final_doc", "")
         }
     }
 
@@ -111,13 +131,37 @@ async def resume_workflow(request: Request, payload: dict):
     if not state:
         return {"status": "error", "message": "Missing state"}
 
+    # attach user edits
     state["reviewed_doc"] = user_input
 
-    result = await workflow.ainvoke(state)
+    user_id = state.get("user_id")
+    project_id = state.get("project_id")
+    template = state.get("template")
 
-    return {
-        "status": "completed",
-        "data": {
-            "final_doc": result.get("final_doc", "")
+    # 🔥 SAME thread_id (VERY IMPORTANT)
+    config = {
+        "configurable": {
+            "thread_id": f"{user_id}_{project_id}_{template}"
         }
     }
+
+    async for event in workflow.astream(state, config=config):
+
+        if "__interrupt__" in event:
+            interrupt = event["__interrupt__"][0]
+
+            return {
+                "status": "waiting_for_user",
+                "interrupt": interrupt,
+                "state": interrupt.value
+            }
+
+        if "doc_finalize" in event:
+            return {
+                "status": "completed",
+                "data": {
+                    "final_doc": event["doc_finalize"].get("final_doc", "")
+                }
+            }
+
+    return {"status": "error", "message": "Workflow failed"}
