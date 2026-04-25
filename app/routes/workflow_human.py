@@ -92,19 +92,22 @@ async def start_workflow(request: Request, payload: dict):
     async for event in workflow.astream(state, config=config):
 
         # ==================================================
-        # 🔥 PROPER INTERRUPT HANDLING (THIS IS THE FIX)
+        # 🔥 PROPER INTERRUPT CAPTURE
         # ==================================================
         if "__interrupt__" in event:
 
-            interrupt = event["__interrupt__"][0]
+            interrupt_obj = event["__interrupt__"][0]
 
             return {
                 "status": "waiting_for_user",
                 "interrupt": {
-                    "value": interrupt.value,
-                    "id": getattr(interrupt, "id", None)
+                    "value": interrupt_obj.value,
+                    "id": getattr(interrupt_obj, "id", None)
                 }
             }
+
+        # optional: debug logs
+        print("EVENT:", event)
 
     return {
         "status": "completed"
