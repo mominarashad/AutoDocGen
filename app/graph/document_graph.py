@@ -9,7 +9,9 @@ from app.graph.nodes.doc_draft_node import create_draft_node
 from app.graph.nodes.human_review_node import human_review_node
 from app.graph.nodes.doc_finalize_node import finalize_doc_node
 
-
+# =====================================================
+# MONGODB CHECKPOINTER
+# =====================================================
 mongo_client = MongoClient(os.getenv("MONGODB_URI"))
 
 checkpointer = MongoDBSaver(
@@ -17,7 +19,6 @@ checkpointer = MongoDBSaver(
     db_name="Doc_Gen",
     collection_name="workflow_checkpoints"
 )
-
 
 # =====================================================
 # STATE
@@ -35,7 +36,7 @@ class WorkflowState(TypedDict, total=False):
 graph = StateGraph(WorkflowState)
 
 # =====================================================
-# 🔥 SYNC DEBUG WRAPPERS (FIXED)
+# 🔥 DEBUG WRAPPERS (SYNC VERSION)
 # =====================================================
 
 def debug_pm_agent(state):
@@ -46,6 +47,7 @@ def debug_pm_agent(state):
     result = fetch_pm_data_node(state)
 
     print("🔥 [pm_agent] EXIT")
+    print("RESULT KEYS:", list(result.keys()) if isinstance(result, dict) else result)
     return result
 
 
@@ -55,16 +57,17 @@ def debug_doc_draft(state):
     print("PM DATA:", state.get("pm_data"))
 
     try:
-        result = create_draft_node(state)   # ✅ NO AWAIT
+        result = create_draft_node(state)
 
-        print("🔥 [doc_draft] DRAFT LENGTH:",
+        print("🔥 [doc_draft] GENERATED DRAFT LENGTH:",
               len(result.get("draft_doc", "")))
 
         print("🔥 [doc_draft] EXIT")
         return result
 
     except Exception as e:
-        print("\n❌❌❌ DOC_DRAFT ERROR ❌❌❌")
+        print("\n❌❌❌ DOC_DRAFT CRASH ❌❌❌")
+        print("ERROR TYPE:", type(e))
         print("ERROR:", str(e))
         raise
 
@@ -75,7 +78,7 @@ def debug_human_review(state):
 
     result = human_review_node(state)
 
-    print("🧠 INTERRUPT TRIGGERED")
+    print("\n🧠 INTERRUPT TRIGGERED")
     print("RAW RESULT:", result)
 
     return result
@@ -88,6 +91,8 @@ def debug_finalize(state):
     result = finalize_doc_node(state)
 
     print("🔥 [doc_finalize] EXIT")
+    print("FINAL LENGTH:", len(result.get("final_doc", "")))
+
     return result
 
 
@@ -108,4 +113,4 @@ graph.add_edge("doc_finalize", END)
 
 workflow = graph.compile(checkpointer=checkpointer)
 
-print("🔥 GRAPH COMPILED WITH PURE SYNC MODE")
+print("🔥 GRAPH COMPILED WITH FULL DEBUG MODE")
