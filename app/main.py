@@ -393,9 +393,9 @@ async def get_generated_doc(
     })
 
     if not doc:
-    return {
-        "status": "not_found",
-        "message": "No document found. Start workflow first."
+       return {
+          "status": "not_found",
+          "message": "No document found. Start workflow first."
     }
 
     print("🔥 DEBUG: Document found, returning")
