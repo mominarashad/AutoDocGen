@@ -147,7 +147,13 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     # ==========================================================
     # 🚀 RUN WORKFLOW
     # ==========================================================
-    result = await workflow.ainvoke(input_state)
+    config = {
+    "configurable": {
+        "thread_id": f"{user_id}_{project_id}_{template_name}"
+         }
+               }
+
+    result = await workflow.ainvoke(input_state, config=config)
 
     final_doc = result.get("improved_docs") or result.get("generated_docs", "")
     formatted_doc = clean_generated_doc(str(final_doc), board_name)
