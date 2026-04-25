@@ -106,11 +106,22 @@ graph.add_node("human_review", debug_human_review)
 graph.add_node("doc_finalize", debug_finalize)
 
 graph.add_edge(START, "pm_agent")
-graph.add_edge("pm_agent", "doc_draft")
-graph.add_edge("doc_draft", "human_review")
-graph.add_edge("human_review", "doc_finalize")
-graph.add_edge("doc_finalize", END)
 
+graph.add_edge("pm_agent", "doc_draft")
+
+# 🔥 FIRST GENERATION
+graph.add_edge("doc_draft", "doc_finalize")
+
+# 🔥 THEN REVIEW
+graph.add_edge("doc_finalize", "human_review")
+
+# 🔥 REGENERATE AFTER REVIEW
+graph.add_edge("human_review", "doc_draft")
+
+# 🔥 FINAL OUTPUT
+graph.add_edge("doc_draft", "doc_finalize")
+
+graph.add_edge("doc_finalize", END)
 workflow = graph.compile(checkpointer=checkpointer)
 
 print("🔥 GRAPH COMPILED WITH FULL DEBUG MODE")
