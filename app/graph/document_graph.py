@@ -5,7 +5,7 @@ import os
 from pymongo import MongoClient
 
 from app.graph.nodes.pm_agent import fetch_pm_data_node
-from app.graph.nodes.doc_agent import create_docs_node
+from app.graph.nodes.doc_draft_node import create_draft_node
 from app.graph.nodes.human_review_node import human_review_node
 from app.graph.nodes.doc_finalize_node import finalize_doc_node
 
@@ -17,6 +17,9 @@ checkpointer = MongoDBSaver(
     collection_name="workflow_checkpoints"
 )
 
+# =====================================================
+# STATE
+# =====================================================
 class WorkflowState(TypedDict, total=False):
     project_id: str
     user_id: str
@@ -30,45 +33,64 @@ class WorkflowState(TypedDict, total=False):
 graph = StateGraph(WorkflowState)
 
 # =====================================================
-# 🔥 DEBUG WRAPPERS (IMPORTANT)
+# 🔥 DEBUG WRAPPERS (FULL TRACE)
 # =====================================================
 
 async def debug_pm_agent(state):
-    print("\n🔥 [DEBUG] ENTER pm_agent")
-    print("STATE:", state)
+    print("\n🔥 [pm_agent] ENTER")
+    print("STATE KEYS:", list(state.keys()))
+    print("PM DATA:", state.get("pm_data"))
+
     result = await fetch_pm_data_node(state)
-    print("🔥 [DEBUG] EXIT pm_agent")
+
+    print("🔥 [pm_agent] EXIT")
+    print("RESULT KEYS:", list(result.keys()) if isinstance(result, dict) else result)
+
     return result
 
 
 async def debug_doc_draft(state):
-    print("🔥 ENTER doc_draft")
-    print("STATE:", state)
+    print("\n🔥 [doc_draft] ENTER")
+    print("STATE KEYS:", list(state.keys()))
+    print("PM DATA:", state.get("pm_data"))
 
     try:
-        result = await create_docs_node(state)
-        print("🔥 EXIT doc_draft")
+        result = await create_draft_node(state)   # ✅ FIXED HERE
+
+        print("🔥 [doc_draft] GENERATED DRAFT LENGTH:",
+              len(result.get("draft_doc", "")))
+
+        print("🔥 [doc_draft] EXIT")
         return result
+
     except Exception as e:
-        print("❌ DOC_DRAFT ERROR:", str(e))
-        raise e
+        print("\n❌❌❌ DOC_DRAFT CRASH ❌❌❌")
+        print("ERROR TYPE:", type(e))
+        print("ERROR:", str(e))
+        raise
+
 
 async def debug_human_review(state):
-    print("\n🔥 [DEBUG] ENTER human_review")
-    print("draft_doc length:", len(state.get("draft_doc", "")))
+    print("\n🔥 [human_review] ENTER")
+    print("DRAFT LENGTH:", len(state.get("draft_doc", "")))
 
     result = await human_review_node(state)
 
-    print("🔥 [DEBUG] INTERRUPT TRIGGERED")
-    print("VALUE:", result)
+    print("\n🧠 INTERRUPT TRIGGERED")
+    print("RAW RESULT:", result)
 
     return result
 
 
 async def debug_finalize(state):
-    print("\n🔥 [DEBUG] ENTER finalize")
+    print("\n🔥 [doc_finalize] ENTER")
+    print("REVIEWED DOC:", state.get("reviewed_doc"))
+
     result = await finalize_doc_node(state)
-    print("🔥 [DEBUG] EXIT finalize")
+
+    print("🔥 [doc_finalize] EXIT")
+    print("FINAL LENGTH:", len(result.get("final_doc", "")))
+
     return result
 
 
@@ -89,4 +111,4 @@ graph.add_edge("doc_finalize", END)
 
 workflow = graph.compile(checkpointer=checkpointer)
 
-print("🔥 GRAPH COMPILED WITH DEBUG MODE")
+print("🔥 GRAPH COMPILED WITH FULL DEBUG MODE")
