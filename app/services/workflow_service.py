@@ -134,6 +134,8 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     input_state = WorkflowState(
         project_id=project_id,
         project_name=board_name,
+        user_id=user_id,          
+        template=template_name,   
 
         user_trello_key=os.getenv("TRELLO_API_KEY") if source == "trello" else "",
         user_trello_token=trello_token if source == "trello" else "",
