@@ -298,22 +298,6 @@ async def channels_with_headings(user_id: str, team_id: str):
     return {"status": "success", "channels": result}
 
 # ------------------ Workflow ------------------
-@app.post("/workflow/run")
-async def run_workflow(request: Request):
-    data = await request.json()
-
-    print("🔥 DEBUG: Workflow run request", data)
-
-    if not all(k in data for k in ("user_id", "project_id", "template")):
-        print("❌ DEBUG: Missing workflow fields")
-        raise HTTPException(status_code=400, detail="Missing required fields")
-
-    return await execute_workflow(
-        data["user_id"],
-        data["project_id"],
-        data,
-        db=request.app.state.db
-    )
 
 # ------------------ Improve with Feedback ------------------
 @app.post("/workflow/improve-with-feedback")
@@ -409,17 +393,10 @@ async def get_generated_doc(
     })
 
     if not doc:
-        print("⚠️ DEBUG: No doc found, triggering workflow")
-        return await execute_workflow(
-            user_id,
-            project_id,
-            {
-                "template": template_name,
-                "source": source,
-                "team_id": team_id
-            },
-            db=db
-        )
+    return {
+        "status": "not_found",
+        "message": "No document found. Start workflow first."
+    }
 
     print("🔥 DEBUG: Document found, returning")
 
