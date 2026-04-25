@@ -4,7 +4,7 @@ from langgraph.checkpoint.mongodb import MongoDBSaver
 from typing import TypedDict, Dict
 import os
 
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import MongoClient
 
 from app.graph.nodes.pm_agent import fetch_pm_data_node
 from app.graph.nodes.doc_agent import create_docs_node
@@ -15,7 +15,7 @@ from app.graph.nodes.doc_finalize_node import finalize_doc_node
 # ==================================================
 # 🧠 MONGO CLIENT (FIXED)
 # ==================================================
-mongo_client = AsyncIOMotorClient(os.getenv("MONGODB_URI"))
+mongo_client = MongoClient(os.getenv("MONGODB_URI"))
 
 
 # ==================================================
