@@ -11,10 +11,16 @@ import os
 
 async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=None):
 
+    # ==========================================================
+    # BASE VALIDATION (from first function merged logic)
+    # ==========================================================
     if db is None:
         raise RuntimeError("Database instance not provided")
 
     docs_collection = db["generated_docs"]
+
+    # Base thread id (from your first function logic)
+    base_thread_id = f"{user_id}_{project_id}"
 
     # ==========================================================
     # INPUT SAFE PARSING
@@ -31,6 +37,7 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
 
     if source not in ["slack", "trello"]:
         raise ValueError(f"Invalid source: {source}")
+
     if not template_name:
         return {"status": "error", "message": "Missing template name"}
 
@@ -43,8 +50,7 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     pm_data = {}
     board_name = ""
     trello_token = None
-
-    team_id = None  # 🔥 ensure safe global availability
+    team_id = None
 
     # ==========================================================
     # 🔵 SLACK FLOW
@@ -147,14 +153,15 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     # ==========================================================
     config = {
         "configurable": {
-            "thread_id": f"{user_id}_{project_id}_{template_name}"
+            # merged threading logic (safe + unique per template)
+            "thread_id": f"{base_thread_id}_{template_name}"
         }
     }
 
     result = await workflow.ainvoke(input_state, config=config)
 
     # ==========================================================
-    # ✅ FIX APPLIED HERE (FINAL DOC PRIORITY)
+    # ✅ FINAL DOC HANDLING
     # ==========================================================
     final_doc = result.get("final_doc") or result.get("generated_docs", "")
 
@@ -217,7 +224,7 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
     version = version_count + 1
 
     # ==========================================================
-    # 💾 SAVE TO DB (FIXED OUTPUT)
+    # 💾 SAVE TO DB
     # ==========================================================
     await docs_collection.insert_one({
         "user_id": user_id,
@@ -227,9 +234,7 @@ async def execute_workflow(user_id: str, project_id: str, data: dict = None, db=
         "generated_docs": formatted_doc,
         "board_name": board_name,
         "source": source,
-
         "team_id": team_id if source == "slack" else None,
-
         "created_at": datetime.utcnow()
     })
 
