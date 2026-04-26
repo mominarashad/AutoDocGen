@@ -23,5 +23,6 @@ def finalize_doc_node(state):
     print("🔥 [finalize_doc] EXIT")
 
     return {
-    "final_doc": draft
+    "final_doc": final_doc
 }
+
