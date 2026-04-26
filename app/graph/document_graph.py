@@ -71,11 +71,7 @@ def debug_finalize(state):
 
     print("🔥 [doc_finalize] FINAL LENGTH:", len(result.get("final_doc", "")))
 
-    # 🔥 ASK HUMAN HERE (THIS IS THE KEY FIX)
-    return interrupt({
-        "message": "Do you want to review this document?",
-        "final_doc": result.get("final_doc", "")
-    })
+    return result
 
 # =====================================================
 # GRAPH BUILD (CLEAN LINEAR FLOW - NO LOOP)
