@@ -25,3 +25,6 @@ pymupdf
 matplotlib
 gradio
 langgraph-checkpoint-mongodb
+
+requests
+cryptography
