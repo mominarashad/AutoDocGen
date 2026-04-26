@@ -5,7 +5,7 @@ import os
 from pymongo import MongoClient
 from langgraph.types import interrupt
 from app.graph.nodes.pm_agent import fetch_pm_data_node
-from app.graph.nodes.doc_draft_node import create_draft_node
+from app.graph.nodes.doc_agent import create_docs_node
 from app.graph.nodes.doc_finalize_node import finalize_doc_node
 from app.graph.nodes.human_review_node import human_review_node
 
@@ -82,7 +82,7 @@ def debug_finalize(state):
 
 
 graph.add_node("pm_agent", debug_pm_agent)
-graph.add_node("doc_draft", debug_doc_draft)
+graph.add_node("doc_draft", create_docs_node)
 graph.add_node("doc_finalize", debug_finalize)
 graph.add_node("human_review", human_review_node)
 
