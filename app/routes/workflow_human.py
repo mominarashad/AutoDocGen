@@ -128,10 +128,11 @@ async def start_workflow(request: Request, payload: dict):
         result = event
 
     return {
-        "status": "completed",
-        "data": result
+    "status": "completed",
+    "data": {
+        "final_doc": result.get("final_doc") or result.get("draft_doc", "")
     }
-
+}
 # ======================================================
 # 🔁 RESUME WORKFLOW (FIXED - NO REBUILD STATE)
 # ======================================================
