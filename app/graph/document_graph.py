@@ -106,23 +106,26 @@ graph.add_node("doc_finalize", debug_finalize)
 graph.add_node("human_review", human_review_node)
 graph.add_node("edit_section", edit_section_node)
 
-# FLOW
+# =========================
+# MAIN FLOW
+# =========================
 graph.add_edge(START, "pm_agent")
 graph.add_edge("pm_agent", "doc_draft")
 graph.add_edge("doc_draft", "doc_finalize")
 graph.add_edge("doc_finalize", "human_review")
 
-# CONDITIONAL ROUTING
+# =========================
+# CONDITIONAL REVIEW FLOW
+# =========================
 graph.add_conditional_edges(
     "human_review",
     route_after_review
 )
 
-# EDIT FLOW
-graph.add_edge("edit_section", "doc_finalize")
-# =====================================================
-# COMPILE GRAPH
-# =====================================================
+# =========================
+# EDIT LOOP (FIXED)
+# =========================
+graph.add_edge("edit_section", "doc_draft")
 workflow = graph.compile(checkpointer=checkpointer)
 
 print("🔥 GRAPH COMPILED SUCCESSFULLY (HUMAN LOOP + EDIT FLOW ENABLED)")
