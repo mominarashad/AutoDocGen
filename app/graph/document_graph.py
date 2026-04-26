@@ -35,7 +35,9 @@ class WorkflowState(TypedDict, total=False):
     final_doc: str
 
     user_feedback: str
-    review_status: str   # 👈 NEW (approve/edit)
+    review_status: str   
+    pdf_headings: list        # ✅ ADD
+    selected_headings: list   # ✅ ADD
 
 graph = StateGraph(WorkflowState)
 
