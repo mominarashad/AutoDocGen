@@ -139,9 +139,10 @@ async def resume_workflow(request: Request, payload: dict):
         }
     }
 
-    # ✅ THIS IS THE CORRECT WAY
     result = await workflow.ainvoke(
-        Command(resume=user_input),
+        Command(update={
+            "user_feedback": user_input
+        }),
         config=config
     )
 
