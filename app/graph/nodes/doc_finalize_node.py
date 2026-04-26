@@ -7,6 +7,8 @@ def finalize_doc_node(state):
     feedback = state.get("user_feedback")
 
     if feedback:
+        print("🔁 Regenerating with feedback")
+
         final = f"""
 IMPROVED DOCUMENT
 
@@ -21,10 +23,8 @@ ORIGINAL:
 
     print("FINAL LENGTH:", len(final))
 
-    # IMPORTANT: return dict wrapper
-    return {
-        "__interrupt__": interrupt({
-            "message": "Review your document",
-            "final_doc": final
-        })
-    }
+    # ✅ ONLY ONE INTERRUPT POINT
+    return interrupt({
+        "message": "Review your document",
+        "final_doc": final
+    })
