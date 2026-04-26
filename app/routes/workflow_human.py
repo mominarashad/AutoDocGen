@@ -94,8 +94,7 @@ async def start_workflow(request: Request, payload: dict):
 
     state = await build_state(payload, db)
     state["user_trello_key"] = os.getenv("TRELLO_API_KEY", "")
-    state["user_trello_token"] = payload.get("trello_token", "")
-
+    state["user_trello_token"] = os.getenv("TRELLO_TOKEN", "")
     config = {
         "configurable": {
             "thread_id": f"{state['user_id']}_{state['project_id']}_{state['template']}"
