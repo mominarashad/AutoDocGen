@@ -78,8 +78,12 @@ graph.add_node("doc_finalize", debug_finalize)
 graph.add_edge(START, "pm_agent")
 graph.add_edge("pm_agent", "doc_draft")
 graph.add_edge("doc_draft", "doc_finalize")
-graph.add_edge("doc_finalize", END)
 
+# 🔥 show final doc → then ask user
+graph.add_edge("doc_finalize", "human_review")
+
+# 🔥 STOP (no loop)
+graph.add_edge("human_review", END)
 workflow = graph.compile(checkpointer=checkpointer)
 
 print("🔥 GRAPH COMPILED (NO LOOP)")
