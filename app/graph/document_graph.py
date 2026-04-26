@@ -30,6 +30,7 @@ class WorkflowState(TypedDict, total=False):
     draft_doc: str
     reviewed_doc: str
     final_doc: str
+    user_feedback: str
 
 
 graph = StateGraph(WorkflowState)
