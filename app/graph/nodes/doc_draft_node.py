@@ -1,28 +1,69 @@
 def create_draft_node(state):
     print("🔥 [doc_draft] ENTER")
 
-    pm_data = state.get("pm_data")
-    feedback = state.get("user_feedback")
+    pm_data = state.get("pm_data", {})
+    feedback = state.get("user_feedback", "")
 
-    if feedback:
-        print("🔁 Regenerating with feedback")
+    # ✅ NEW: TEMPLATE + HEADINGS
+    template = state.get("template", "")
+    selected_headings = state.get("selected_headings", [])
+    pdf_headings = state.get("pdf_headings", [])
+
+    # fallback safety
+    selected_headings = selected_headings or pdf_headings or []
+
+    print("📄 Template:", template)
+    print("📌 Selected Headings:", selected_headings)
+
+    # =====================================================
+    # 🆕 FIRST GENERATION
+    # =====================================================
+    if not feedback:
+        print("🆕 First generation")
+
+        sections = []
+
+        for heading in selected_headings:
+            sections.append(f"""
+## {heading}
+
+Generated content for **{heading}** based on:
+{pm_data}
+""")
 
         draft = f"""
-Improved Document:
+# {template} Document
+
+{chr(10).join(sections)}
+"""
+
+    # =====================================================
+    # 🔁 REGENERATION (WITH FEEDBACK)
+    # =====================================================
+    else:
+        print("🔁 Regenerating with feedback")
+
+        sections = []
+
+        for heading in selected_headings:
+            sections.append(f"""
+## {heading}
+
+Improved content for **{heading}**
 
 User Feedback:
 {feedback}
 
-Data:
+Context:
 {pm_data}
-"""
-    else:
-        print("🆕 First generation")
+""")
 
         draft = f"""
-Initial Document:
+# {template} Document (Revised)
 
-{pm_data}
+{chr(10).join(sections)}
 """
+
+    print("🔥 [doc_draft] EXIT")
 
     return {"draft_doc": draft}
