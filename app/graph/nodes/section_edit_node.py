@@ -100,9 +100,14 @@ STRICT RULES:
     print("✅ Section updated:", target_section)
 
     return {
-        "draft_doc": updated_doc,
+    "draft_doc": updated_doc,
 
-        # 🔥 CRITICAL: reset so loop doesn’t repeat infinitely
-        "user_feedback": "",
-        "new_headings": []
-    }
+    
+    "pm_data": state.get("pm_data"),
+    "pdf_headings": state.get("pdf_headings"),
+    "selected_headings": state.get("selected_headings"),
+
+    
+    "user_feedback": "",
+    "new_headings": []
+}
