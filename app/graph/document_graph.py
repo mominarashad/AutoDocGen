@@ -8,6 +8,7 @@ from app.graph.nodes.pm_agent import fetch_pm_data_node
 from app.graph.nodes.doc_draft_node import create_draft_node
 from app.graph.nodes.doc_finalize_node import finalize_doc_node
 
+
 # =====================================================
 # MONGODB CHECKPOINTER
 # =====================================================
@@ -18,6 +19,7 @@ checkpointer = MongoDBSaver(
     db_name="Doc_Gen",
     collection_name="workflow_checkpoints"
 )
+
 
 # =====================================================
 # STATE
@@ -35,6 +37,7 @@ class WorkflowState(TypedDict, total=False):
 
 graph = StateGraph(WorkflowState)
 
+
 # =====================================================
 # DEBUG WRAPPERS
 # =====================================================
@@ -51,9 +54,9 @@ def debug_doc_draft(state):
 
     result = create_draft_node(state)
 
-    print("🔥 [doc_draft] GENERATED LENGTH:",
-          len(result.get("draft_doc", "")))
+    print("🔥 [doc_draft] GENERATED LENGTH:", len(result.get("draft_doc", "")))
 
+    print("🔥 [doc_draft] EXIT")
     return result
 
 
@@ -62,29 +65,32 @@ def debug_finalize(state):
 
     result = finalize_doc_node(state)
 
-    print("🔥 [doc_finalize] FINAL LENGTH:",
-          len(result.get("final_doc", "")))
+    print("🔥 [doc_finalize] FINAL LENGTH:", len(result.get("final_doc", "")))
 
+    print("🔥 [doc_finalize] EXIT")
     return result
 
 
 # =====================================================
-# GRAPH BUILD (LINEAR - NO LOOP)
+# GRAPH BUILD (CLEAN LINEAR FLOW - NO LOOP)
 # =====================================================
 
 graph.add_node("pm_agent", debug_pm_agent)
 graph.add_node("doc_draft", debug_doc_draft)
 graph.add_node("doc_finalize", debug_finalize)
 
+# ENTRY FLOW
 graph.add_edge(START, "pm_agent")
 graph.add_edge("pm_agent", "doc_draft")
 graph.add_edge("doc_draft", "doc_finalize")
 
-# 🔥 show final doc → then ask user
-graph.add_edge("doc_finalize", "human_review")
+# FINAL OUTPUT
+graph.add_edge("doc_finalize", END)
 
-# 🔥 STOP (no loop)
-graph.add_edge("human_review", END)
+
+# =====================================================
+# COMPILE GRAPH
+# =====================================================
 workflow = graph.compile(checkpointer=checkpointer)
 
-print("🔥 GRAPH COMPILED (NO LOOP)")
+print("🔥 GRAPH COMPILED SUCCESSFULLY (NO LOOP, NO HUMAN NODE)")
