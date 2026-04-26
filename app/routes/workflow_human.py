@@ -140,7 +140,8 @@ async def resume_workflow(request: Request, payload: dict):
     user_id = payload.get("user_id")
     project_id = payload.get("project_id")
     template = payload.get("template")
-    user_input = payload.get("user_input", {})
+
+    user_input = payload.get("user_input") or {}
 
     config = {
         "configurable": {
