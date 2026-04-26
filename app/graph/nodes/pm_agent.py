@@ -1,5 +1,5 @@
 import httpx
-
+import os
 
 # --------------------------------------------------
 # Resolve board name → board ID (SYNC VERSION)
