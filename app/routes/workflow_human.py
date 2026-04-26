@@ -9,43 +9,6 @@ router = APIRouter(prefix="/workflow")
 
 
 # ======================================================
-# 🧠 DOCUMENT GENERATION ENGINE
-# ======================================================
-def generate_document_from_headings(template, project_name, conversation, selected_headings):
-    """
-    Converts project conversation into structured professional document
-    """
-
-    def build_section(heading):
-        return f"""
-## {heading}
-
-This section defines **{heading}** for the {project_name} system.
-
-Key insights derived from project context:
-- Functional requirements and system scope
-- User roles and responsibilities
-- Workflow and process behavior
-- System constraints and expectations
-"""
-
-    sections = []
-
-    for heading in selected_headings:
-        sections.append(build_section(heading))
-
-    return f"""
-# {template}
-
-## Project: {project_name}
-
----
-
-{chr(10).join(sections)}
-"""
-
-
-# ======================================================
 # 🧠 BUILD STATE (MAIN INTELLIGENCE LAYER)
 # ======================================================
 async def build_state(payload: dict, db):
@@ -67,13 +30,10 @@ async def build_state(payload: dict, db):
 
     pm_data = {}
     conversation = ""
-    project_name = template or "Software Project"
+    project_name = template
 
-    # ======================================================
-    # SLACK FLOW
-    # ======================================================
+    # ---------------- SLACK ----------------
     if source == "slack":
-
         slack_token = await get_slack_token(user_id, team_id, db)
 
         if not slack_token:
@@ -87,8 +47,6 @@ async def build_state(payload: dict, db):
             for m in messages if m.get("text")
         )
 
-        project_name = f"Slack Project {project_id}"
-
         pm_data = {
             "source": "slack",
             "team_id": team_id,
@@ -96,51 +54,30 @@ async def build_state(payload: dict, db):
             "conversation": conversation
         }
 
-    # ======================================================
-    # TRELLO FLOW
-    # ======================================================
+    # ---------------- TRELLO ----------------
     else:
         token = await get_user_token(user_id, db)
 
         if not token:
             raise ValueError("Trello not connected")
 
-        project_name = f"Trello Project {project_id}"
-
         pm_data = {
             "source": "trello",
             "board_id": project_id
         }
 
-    # ======================================================
-    # 🧠 GENERATE FINAL DOCUMENT HERE
-    # ======================================================
-    final_doc = generate_document_from_headings(
-        template=template,
-        project_name=project_name,
-        conversation=conversation,
-        selected_headings=selected_headings or pdf_headings
-    )
-
-    # ======================================================
-    # RETURN COMPLETE WORKFLOW STATE
-    # ======================================================
+    # ✅ ONLY RETURN RAW STATE (NO DOC GENERATION)
     return WorkflowState(
         project_id=project_id,
         user_id=user_id,
         template=template,
-
         pm_data=pm_data,
-
         pdf_headings=pdf_headings,
         selected_headings=selected_headings,
-
-        draft_doc=final_doc,   # ✅ FINAL GENERATED DOC HERE
+        draft_doc="",
         final_doc="",
         user_feedback=""
     )
-
-
 # ======================================================
 # 🚀 START WORKFLOW
 # ======================================================
@@ -156,6 +93,8 @@ async def start_workflow(request: Request, payload: dict):
         return {"status": "error", "message": "Please select at least one heading"}
 
     state = await build_state(payload, db)
+    state["user_trello_key"] = os.getenv("TRELLO_API_KEY", "")
+    state["user_trello_token"] = payload.get("trello_token", "")
 
     config = {
         "configurable": {
