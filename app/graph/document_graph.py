@@ -1,6 +1,6 @@
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.mongodb import MongoDBSaver
-from typing import TypedDict, Dict, List, Optional
+from typing import TypedDict, Dict, List
 import os
 from pymongo import MongoClient
 
@@ -20,7 +20,6 @@ checkpointer = MongoDBSaver(
     db_name="Doc_Gen",
     collection_name="workflow_checkpoints"
 )
-
 
 # =====================================================
 # STATE
@@ -42,9 +41,10 @@ class WorkflowState(TypedDict, total=False):
     selected_headings: List[str]
     new_headings: List[str]
 
-
+# =====================================================
+# GRAPH INIT
+# =====================================================
 graph = StateGraph(WorkflowState)
-
 
 # =====================================================
 # DEBUG WRAPPERS
@@ -62,8 +62,8 @@ def debug_doc_draft(state):
     result = create_docs_node(state)
 
     print("🔥 [doc_draft] GENERATED LENGTH:", len(result.get("draft_doc", "")))
-
     print("🔥 [doc_draft] EXIT")
+
     return result
 
 
@@ -73,52 +73,61 @@ def debug_finalize(state):
     result = finalize_doc_node(state)
 
     print("🔥 [doc_finalize] FINAL LENGTH:", len(result.get("final_doc", "")))
+    print("🔥 [doc_finalize] EXIT")
 
     return result
 
-
 # =====================================================
-# ROUTING LOGIC (🔥 IMPORTANT FIX)
+# ROUTING LOGIC (🔥 CORE FIX)
 # =====================================================
 def route_after_review(state):
     """
-    Decide whether to regenerate doc or finish workflow
+    Decide next step after human review
     """
 
     feedback = state.get("user_feedback", "")
     new_headings = state.get("new_headings", [])
 
+    # 🔁 If user gave feedback OR added headings → go edit
     if feedback or new_headings:
-        print("🔁 Regenerating document (feedback/new headings detected)")
-        return "doc_draft"
+        print("🔁 Changes detected → going to edit_section")
+        return "edit_section"
 
-    print("✅ No changes requested → END workflow")
+    # ✅ Otherwise finish
+    print("✅ No changes → END workflow")
     return END
-
 
 # =====================================================
 # GRAPH BUILD
 # =====================================================
 
+# ✅ NODES
 graph.add_node("pm_agent", debug_pm_agent)
 graph.add_node("doc_draft", debug_doc_draft)
 graph.add_node("doc_finalize", debug_finalize)
 graph.add_node("human_review", human_review_node)
 
+# 🔥 IMPORTANT: ADD MISSING NODE
+graph.add_node("edit_section", edit_section_node)
+
+# ✅ FLOW
 graph.add_edge(START, "pm_agent")
 graph.add_edge("pm_agent", "doc_draft")
-
 graph.add_edge("doc_draft", "doc_finalize")
-
 graph.add_edge("doc_finalize", "human_review")
 
-# 🔥 NEW: if user selects section edit
-graph.add_edge("human_review", "edit_section")
-graph.add_edge("edit_section", "doc_finalize")
+# 🔥 CONDITIONAL ROUTING (FIXED)
+graph.add_conditional_edges(
+    "human_review",
+    route_after_review
+)
+
+# 🔁 EDIT → REGENERATE
+graph.add_edge("edit_section", "doc_draft")
 
 # =====================================================
 # COMPILE GRAPH
 # =====================================================
 workflow = graph.compile(checkpointer=checkpointer)
 
-print("🔥 GRAPH COMPILED SUCCESSFULLY (HUMAN LOOP ENABLED SAFE MODE)")
+print("🔥 GRAPH COMPILED SUCCESSFULLY (HUMAN LOOP + EDIT FLOW ENABLED)")
