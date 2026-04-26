@@ -12,8 +12,24 @@ def generate_documentation(cleaned_pm_data: str, pdf_headings: list, selected_he
 
     chain = prompt | llm
 
+    strict_instruction = """
+YOU ARE A STRICT DOCUMENT FORMATTING ENGINE.
+
+RULES (VERY IMPORTANT):
+1. DO NOT change headings order
+2. DO NOT remove any selected headings
+3. DO NOT merge or rename sections
+4. ONLY ADD content under provided headings
+5. If user adds new headings, include them EXACTLY as provided
+6. If no new headings are provided, use only selected_headings
+7. Maintain same structure as input document
+8. DO NOT rewrite document format or restructure content
+
+OUTPUT MUST FOLLOW EXACTLY THE GIVEN HEADING STRUCTURE.
+"""
+
     result = chain.invoke({
-        "cleaned_pm_data": cleaned_pm_data,
+        "cleaned_pm_data": strict_instruction + "\n\nDATA:\n" + cleaned_pm_data,
         "pdf_headings": pdf_headings,
         "selected_headings": selected_headings
     })
