@@ -8,7 +8,7 @@ from app.graph.nodes.pm_agent import fetch_pm_data_node
 from app.graph.nodes.doc_agent import create_docs_node
 from app.graph.nodes.doc_finalize_node import finalize_doc_node
 from app.graph.nodes.human_review_node import human_review_node
-
+from app.graph.nodes.section_edit_node import edit_section_node
 
 # =====================================================
 # MONGODB CHECKPOINTER
@@ -105,25 +105,16 @@ graph.add_node("doc_draft", debug_doc_draft)
 graph.add_node("doc_finalize", debug_finalize)
 graph.add_node("human_review", human_review_node)
 
-# MAIN FLOW
 graph.add_edge(START, "pm_agent")
 graph.add_edge("pm_agent", "doc_draft")
+
 graph.add_edge("doc_draft", "doc_finalize")
 
-# review step
 graph.add_edge("doc_finalize", "human_review")
 
-# ONLY LOOP BACK IF USER GAVE FEEDBACK OR HEADINGS
-def route_after_review(state):
-    if state.get("user_feedback") or state.get("new_headings"):
-        return "doc_draft"
-    return END
-
-graph.add_conditional_edges(
-    "human_review",
-    route_after_review
-)
-
+# 🔥 NEW: if user selects section edit
+graph.add_edge("human_review", "edit_section")
+graph.add_edge("edit_section", "doc_finalize")
 
 # =====================================================
 # COMPILE GRAPH
