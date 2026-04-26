@@ -1,3 +1,5 @@
+from langgraph.types import interrupt
+
 def finalize_doc_node(state):
     print("\n🔥 [doc_finalize] ENTER")
 
@@ -8,4 +10,8 @@ def finalize_doc_node(state):
 
     print("FINAL LENGTH:", len(final or ""))
 
-    return {"final_doc": final}
+    # 🚨 PAUSE HERE (NOT A SEPARATE NODE)
+    return interrupt({
+        "message": "Do you want to review this document?",
+        "final_doc": final
+    })
