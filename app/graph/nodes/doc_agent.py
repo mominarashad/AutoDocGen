@@ -5,7 +5,12 @@ from app.langsmith.load_prompt import load_prompt_from_langsmith
 # ==========================================================
 # 🧠 LLM DOCUMENT GENERATION
 # ==========================================================
-def generate_documentation(cleaned_pm_data: str, pdf_headings: list, selected_headings: list):
+def generate_documentation(
+    cleaned_pm_data: str,
+    pdf_headings: list,
+    selected_headings: list,
+    template: str
+):
 
     prompt = load_prompt_from_langsmith("doc_prompt_pdf_selected")
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
