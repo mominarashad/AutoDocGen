@@ -20,7 +20,6 @@ async def build_state(payload: dict, db):
     source = payload.get("source")
     team_id = payload.get("team_id")
 
-    # ✅ NEW FIELDS
     template = payload.get("template", "").strip()
     pdf_headings = payload.get("pdf_headings", [])
     selected_headings = payload.get("selected_headings", [])
@@ -67,31 +66,27 @@ async def build_state(payload: dict, db):
             "board_id": project_id
         }
 
-    #  RETURN FULL STATE INCLUDING HEADINGS + TEMPLATE
     return WorkflowState(
         project_id=project_id,
         user_id=user_id,
         template=template,
-
         pm_data=pm_data,
-
         pdf_headings=pdf_headings,
         selected_headings=selected_headings,
-
         draft_doc="",
         final_doc="",
         user_feedback=""
     )
 
+
 # ======================================================
-# 🚀 START WORKFLOW (FIRST GENERATION)
+# 🚀 START WORKFLOW
 # ======================================================
 @router.post("/start")
 async def start_workflow(request: Request, payload: dict):
 
     db = request.app.state.db
 
-    # ✅ BASIC VALIDATION (IMPORTANT)
     if not payload.get("template"):
         return {"status": "error", "message": "Template selection required"}
 
@@ -106,10 +101,14 @@ async def start_workflow(request: Request, payload: dict):
         }
     }
 
-    result = None
+    # ======================================================
+    # 🔥 FIXED LANGGRAPH LOOP (IMPORTANT PART)
+    # ======================================================
+    result = {}
 
     async for event in workflow.astream(state, config=config):
 
+        # ---------------- INTERRUPT HANDLING ----------------
         if isinstance(event, dict) and "__interrupt__" in event:
             interrupt = event["__interrupt__"][0]
 
@@ -125,19 +124,24 @@ async def start_workflow(request: Request, payload: dict):
                 }
             }
 
-        result = event
+        # ---------------- SAFE MERGE ----------------
+        if isinstance(event, dict):
+            result.update(event)
 
+    # ======================================================
+    # FINAL RESPONSE
+    # ======================================================
     return {
-    "status": "completed",
-    "data": {
-        "final_doc": result.get("final_doc") or result.get("draft_doc", "")
+        "status": "completed",
+        "data": {
+            "final_doc": result.get("final_doc") or result.get("draft_doc", "")
+        }
     }
-}
-# ======================================================
-# 🔁 RESUME WORKFLOW (FIXED - NO REBUILD STATE)
-# ======================================================
 
 
+# ======================================================
+# 🔁 RESUME WORKFLOW
+# ======================================================
 @router.post("/resume")
 async def resume_workflow(request: Request, payload: dict):
 
