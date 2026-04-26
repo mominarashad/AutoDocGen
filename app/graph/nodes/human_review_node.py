@@ -6,6 +6,6 @@ def human_review_node(state):
     final_doc = state.get("final_doc", "")
 
     return interrupt({
-        "message": "Here is your document. Do you want changes?",
+        "message": "Review your document",
         "final_doc": final_doc
     })
