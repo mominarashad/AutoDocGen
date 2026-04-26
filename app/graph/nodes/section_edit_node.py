@@ -34,12 +34,17 @@ def split_into_sections(doc: str):
 def find_best_section(sections, instruction):
     instruction = instruction.lower()
 
+    best_match = None
+    best_score = 0
+
     for heading in sections.keys():
-        if any(word in heading.lower() for word in instruction.split()):
-            return heading
+        score = sum(1 for word in instruction.split() if word in heading.lower())
 
-    return None
+        if score > best_score:
+            best_score = score
+            best_match = heading
 
+    return best_match
 
 # ==========================================================
 # 🧩 REBUILD DOCUMENT (ORDER SAFE)
