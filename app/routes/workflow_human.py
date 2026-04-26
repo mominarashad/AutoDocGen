@@ -5,6 +5,7 @@ from app.models.user_token_model import get_user_token
 from app.models.slack_model import get_slack_token
 from app.services.slack_service import fetch_channel_messages
 import os
+
 router = APIRouter(prefix="/workflow")
 
 
@@ -30,10 +31,11 @@ async def build_state(payload: dict, db):
 
     pm_data = {}
     conversation = ""
-    project_name = template
+    project_name = template or "Project"
 
     # ---------------- SLACK ----------------
     if source == "slack":
+
         slack_token = await get_slack_token(user_id, team_id, db)
 
         if not slack_token:
@@ -54,6 +56,8 @@ async def build_state(payload: dict, db):
             "conversation": conversation
         }
 
+        project_name = f"Slack Project {project_id}"
+
     # ---------------- TRELLO ----------------
     else:
         token = await get_user_token(user_id, db)
@@ -66,18 +70,31 @@ async def build_state(payload: dict, db):
             "board_id": project_id
         }
 
-    # ✅ ONLY RETURN RAW STATE (NO DOC GENERATION)
+        project_name = f"Trello Project {project_id}"
+
+    # ======================================================
+    # 🔥 IMPORTANT FIX (ADD TREllo KEYS FOR pm_agent)
+    # ======================================================
     return WorkflowState(
         project_id=project_id,
         user_id=user_id,
         template=template,
+
         pm_data=pm_data,
+
         pdf_headings=pdf_headings,
         selected_headings=selected_headings,
+
         draft_doc="",
         final_doc="",
-        user_feedback=""
+        user_feedback="",
+
+        # 🔥 FIX: REQUIRED BY pm_agent NODE
+        user_trello_key=os.getenv("TRELLO_API_KEY", ""),
+        user_trello_token=os.getenv("TRELLO_TOKEN", "")
     )
+
+
 # ======================================================
 # 🚀 START WORKFLOW
 # ======================================================
@@ -93,8 +110,7 @@ async def start_workflow(request: Request, payload: dict):
         return {"status": "error", "message": "Please select at least one heading"}
 
     state = await build_state(payload, db)
-    state["user_trello_key"] = os.getenv("TRELLO_API_KEY", "")
-    state["user_trello_token"] = os.getenv("TRELLO_TOKEN", "")
+
     config = {
         "configurable": {
             "thread_id": f"{state['user_id']}_{state['project_id']}_{state['template']}"
