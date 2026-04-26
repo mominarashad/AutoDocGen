@@ -88,9 +88,7 @@ graph.add_edge(START, "pm_agent")
 graph.add_edge("pm_agent", "doc_draft")
 graph.add_edge("doc_draft", "doc_finalize")
 
-# 👇 ONLY ONE INTERRUPT POINT
-graph.add_edge("doc_finalize", "human_review")
-graph.add_edge("human_review", END)
+graph.add_edge("doc_finalize", END)
 
 # =====================================================
 # COMPILE GRAPH
