@@ -28,12 +28,14 @@ class WorkflowState(TypedDict, total=False):
     project_id: str
     user_id: str
     template: str
-    pm_data: Dict
-    draft_doc: str
-    reviewed_doc: str
-    final_doc: str
-    user_feedback: str
 
+    pm_data: Dict
+
+    draft_doc: str
+    final_doc: str
+
+    user_feedback: str
+    review_status: str   # 👈 NEW (approve/edit)
 
 graph = StateGraph(WorkflowState)
 
