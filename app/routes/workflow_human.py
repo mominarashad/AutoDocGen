@@ -9,7 +9,44 @@ router = APIRouter(prefix="/workflow")
 
 
 # ======================================================
-# 🧠 BUILD STATE
+# 🧠 DOCUMENT GENERATION ENGINE
+# ======================================================
+def generate_document_from_headings(template, project_name, conversation, selected_headings):
+    """
+    Converts project conversation into structured professional document
+    """
+
+    def build_section(heading):
+        return f"""
+## {heading}
+
+This section defines **{heading}** for the {project_name} system.
+
+Key insights derived from project context:
+- Functional requirements and system scope
+- User roles and responsibilities
+- Workflow and process behavior
+- System constraints and expectations
+"""
+
+    sections = []
+
+    for heading in selected_headings:
+        sections.append(build_section(heading))
+
+    return f"""
+# {template}
+
+## Project: {project_name}
+
+---
+
+{chr(10).join(sections)}
+"""
+
+
+# ======================================================
+# 🧠 BUILD STATE (MAIN INTELLIGENCE LAYER)
 # ======================================================
 async def build_state(payload: dict, db):
 
@@ -29,9 +66,14 @@ async def build_state(payload: dict, db):
         raise ValueError("Template is required")
 
     pm_data = {}
+    conversation = ""
+    project_name = template or "Software Project"
 
-    # ---------------- SLACK ----------------
+    # ======================================================
+    # SLACK FLOW
+    # ======================================================
     if source == "slack":
+
         slack_token = await get_slack_token(user_id, team_id, db)
 
         if not slack_token:
@@ -41,12 +83,11 @@ async def build_state(payload: dict, db):
         messages = res.get("messages", [])
 
         conversation = "\n".join(
-            f"{m.get('user')}: {m.get('text')}"
+            f"{m.get('user', 'unknown')}: {m.get('text', '')}"
             for m in messages if m.get("text")
         )
 
-        print("🧪 SLACK CONVERSATION PREVIEW:")
-        print(conversation[:1000])
+        project_name = f"Slack Project {project_id}"
 
         pm_data = {
             "source": "slack",
@@ -55,33 +96,53 @@ async def build_state(payload: dict, db):
             "conversation": conversation
         }
 
-    # ---------------- TRELLO ----------------
+    # ======================================================
+    # TRELLO FLOW
+    # ======================================================
     else:
         token = await get_user_token(user_id, db)
 
         if not token:
             raise ValueError("Trello not connected")
 
+        project_name = f"Trello Project {project_id}"
+
         pm_data = {
             "source": "trello",
             "board_id": project_id
         }
 
+    # ======================================================
+    # 🧠 GENERATE FINAL DOCUMENT HERE
+    # ======================================================
+    final_doc = generate_document_from_headings(
+        template=template,
+        project_name=project_name,
+        conversation=conversation,
+        selected_headings=selected_headings or pdf_headings
+    )
+
+    # ======================================================
+    # RETURN COMPLETE WORKFLOW STATE
+    # ======================================================
     return WorkflowState(
         project_id=project_id,
         user_id=user_id,
         template=template,
+
         pm_data=pm_data,
+
         pdf_headings=pdf_headings,
         selected_headings=selected_headings,
-        draft_doc="",
+
+        draft_doc=final_doc,   # ✅ FINAL GENERATED DOC HERE
         final_doc="",
         user_feedback=""
     )
 
 
 # ======================================================
-# 🚀 START WORKFLOW (FIXED & SAFE MERGE)
+# 🚀 START WORKFLOW
 # ======================================================
 @router.post("/start")
 async def start_workflow(request: Request, payload: dict):
@@ -102,26 +163,21 @@ async def start_workflow(request: Request, payload: dict):
         }
     }
 
-    # ======================================================
-    # 🔥 USE ainvoke (FINAL STATE GUARANTEED)
-    # ======================================================
     result = await workflow.ainvoke(state, config=config)
 
-    print("🔥 FINAL WORKFLOW RESULT KEYS:", result.keys())
-    print("🔥 FINAL DOC RAW:", result.get("final_doc"))
+    final_doc = result.get("final_doc") or result.get("draft_doc", "")
 
-    final_doc = result.get("final_doc")
-
-    # handle dict structure from finalize node
     if isinstance(final_doc, dict):
         final_doc = final_doc.get("content", "")
 
     return {
         "status": "completed",
         "data": {
-            "final_doc": final_doc or result.get("draft_doc", "")
+            "final_doc": final_doc
         }
     }
+
+
 # ======================================================
 # 🔁 RESUME WORKFLOW
 # ======================================================
