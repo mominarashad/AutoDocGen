@@ -81,20 +81,18 @@ def debug_finalize(state):
 # ROUTING LOGIC (🔥 CORE FIX)
 # =====================================================
 def route_after_review(state):
-    """
-    Decide next step after human review
-    """
-
     feedback = state.get("user_feedback", "")
     new_headings = state.get("new_headings", [])
 
-    # 🔁 If user gave feedback OR added headings → go edit
-    if feedback or new_headings:
-        print("🔁 Changes detected → going to edit_section")
+    if new_headings:
+        print("🔁 New headings → regenerate full doc")
+        return "doc_draft"
+
+    if feedback:
+        print("✏️ Feedback → edit section")
         return "edit_section"
 
-    # ✅ Otherwise finish
-    print("✅ No changes → END workflow")
+    print("✅ No changes → END")
     return END
 
 # =====================================================
