@@ -5,7 +5,15 @@ def human_review_node(state):
 
     final_doc = state.get("final_doc", "")
 
-    return interrupt({
-        "message": "Review your document",
+    result = interrupt({
+        "message": "Review document (optional feedback + optional new headings)",
         "final_doc": final_doc
     })
+
+    # ======================================================
+    # SAFE EXTRACTION (USER MAY SEND NOTHING)
+    # ======================================================
+    return {
+        "user_feedback": result.get("user_feedback", "") or "",
+        "new_headings": result.get("new_headings", []) or []
+    }
