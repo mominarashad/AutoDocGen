@@ -1,9 +1,10 @@
 import re
+import json
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 
 # ==========================================================
-# 🧩 SPLIT DOCUMENT INTO SECTIONS (FIXED)
+# 🧩 SPLIT DOCUMENT INTO SECTIONS
 # ==========================================================
 def split_into_sections(doc: str):
     sections = {}
@@ -29,25 +30,62 @@ def split_into_sections(doc: str):
 
 
 # ==========================================================
-# 🎯 FIND BEST SECTION
+# 🧠 INTENT PARSER (NO HARDCODING)
 # ==========================================================
-def find_best_section(sections, instruction):
-    instruction = instruction.lower()
+def parse_user_intent(instruction: str):
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+
+    prompt = f"""
+Convert this user request into structured JSON.
+
+USER INPUT:
+{instruction}
+
+OUTPUT FORMAT:
+{{
+  "action": "add | update | remove",
+  "target_type": "content | constraint | heading",
+  "keywords": ["word1", "word2"]
+}}
+
+RULE:
+Return ONLY valid JSON.
+"""
+
+    result = llm.invoke(prompt)
+
+    try:
+        return json.loads(result.content if hasattr(result, "content") else str(result))
+    except:
+        # fallback (still no hardcoding)
+        return {
+            "action": "update",
+            "keywords": instruction.split()
+        }
+
+
+# ==========================================================
+# 🎯 SMART SECTION MATCHING (NO HARDCODE)
+# ==========================================================
+def find_best_section(sections, parsed):
+    keywords = parsed.get("keywords", [])
 
     best_match = None
     best_score = 0
 
     for heading in sections.keys():
-        score = sum(1 for word in instruction.split() if word in heading.lower())
+        score = sum(1 for k in keywords if k.lower() in heading.lower())
 
         if score > best_score:
             best_score = score
             best_match = heading
 
-    return best_match
+    # fallback → if nothing matches, take last used context
+    return best_match or list(sections.keys())[-1]
+
 
 # ==========================================================
-# 🧩 REBUILD DOCUMENT (ORDER SAFE)
+# 🧩 REBUILD DOCUMENT (SAFE ORDER)
 # ==========================================================
 def rebuild_document(original_doc: str, updated_sections: dict):
     output = []
@@ -61,88 +99,95 @@ def rebuild_document(original_doc: str, updated_sections: dict):
             output.append(line_strip)
             output.append(updated_sections[line_strip])
         else:
-            if not current_heading:
-                output.append(line)
+            output.append(line)
 
     return "\n".join(output)
 
 
 # ==========================================================
-# ✏️ EDIT SECTION NODE (FINAL FIXED)
+# ✏️ EDIT SECTION NODE (FINAL INTELLIGENT VERSION)
 # ==========================================================
 def edit_section_node(state):
     print("\n🔥 [edit_section] ENTER")
 
     draft_doc = state.get("draft_doc", "")
     instruction = state.get("user_feedback", "")
-    target_section = state.get("target_section")
 
-    if not draft_doc:
-        print("❌ No draft_doc found")
+    if not draft_doc or not instruction:
         return state
 
-    if not instruction:
-        print("⚠️ No feedback → skipping edit")
-        return state
+    # ======================================================
+    # 1. INTENT EXTRACTION (NO HARDCODE)
+    # ======================================================
+    parsed = parse_user_intent(instruction)
 
-    # 🔹 Split document
+    # ======================================================
+    # 2. SPLIT DOC
+    # ======================================================
     sections = split_into_sections(draft_doc)
 
-    # 🔹 Auto-detect section
-    if not target_section:
-        target_section = find_best_section(sections, instruction)
+    # ======================================================
+    # 3. FIND TARGET SECTION (SMART)
+    # ======================================================
+    target_section = find_best_section(sections, parsed)
 
     if not target_section or target_section not in sections:
-        print("❌ Target section not found")
+        print("❌ No matching section found")
         return state
 
     old_content = sections[target_section]
 
-    # 🔹 LLM (STRICT MODE)
+    # ======================================================
+    # 4. LLM EDIT (STRICT BUT NATURAL)
+    # ======================================================
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
 
     prompt = f"""
-You are a STRICT document editor.
+You are an intelligent document editor.
 
 TASK:
-- Modify ONLY the given section
-
-RULES:
-1. DO NOT create new sections
-2. DO NOT duplicate headings
-3. DO NOT modify other sections
-4. If instruction says "add", append missing info
-5. If instruction says "update/fix", modify content
-6. RETURN ONLY section content (NO heading)
+Modify ONLY this section based on user request.
 
 SECTION:
+{target_section}
+
+CURRENT CONTENT:
 {old_content}
 
-USER INSTRUCTION:
+USER REQUEST:
 {instruction}
+
+RULES:
+- Do NOT change other sections
+- Do NOT add new headings
+- Keep formatting consistent
+- Apply changes naturally (no rigid templates)
 """
 
     result = llm.invoke(prompt)
 
     new_content = result.content if hasattr(result, "content") else str(result)
 
-    # 🔹 Update section
+    # ======================================================
+    # 5. UPDATE SECTION
+    # ======================================================
     sections[target_section] = new_content.strip()
 
-    # 🔹 Rebuild document safely
+    # ======================================================
+    # 6. REBUILD DOCUMENT
+    # ======================================================
     updated_doc = rebuild_document(draft_doc, sections)
 
     print("✅ Section updated:", target_section)
 
+    # ======================================================
+    # 7. RETURN STATE
+    # ======================================================
     return {
         "draft_doc": updated_doc,
-
-        # keep required state
         "pm_data": state.get("pm_data"),
         "pdf_headings": state.get("pdf_headings"),
         "selected_headings": state.get("selected_headings"),
-
-        # clear after use
         "user_feedback": "",
         "new_headings": []
     }
