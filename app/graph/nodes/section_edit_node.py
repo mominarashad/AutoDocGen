@@ -98,6 +98,7 @@ STRICT RULES:
     updated_doc = rebuild_document(sections)
 
     print("✅ Section updated:", target_section)
+    print("📄 Updated draft length:", len(updated_doc))
 
     return {
     "draft_doc": updated_doc,
