@@ -1,17 +1,31 @@
 from langgraph.types import interrupt
 
 def finalize_doc_node(state):
-    print("\n🔥 [doc_finalize] ENTER")
+    print("\n🔥 FINALIZE ENTER")
 
-    reviewed = state.get("reviewed_doc")
-    draft = state.get("draft_doc")
+    draft = state.get("draft_doc", "")
+    feedback = state.get("user_feedback")
 
-    final = reviewed if reviewed else draft
+    # If user already gave feedback → regenerate
+    if feedback:
+        print("🔁 Regenerating with feedback")
 
-    print("FINAL LENGTH:", len(final or ""))
+        final = f"""
+IMPROVED DOCUMENT
 
-    # 🚨 PAUSE HERE (NOT A SEPARATE NODE)
+FEEDBACK:
+{feedback}
+
+ORIGINAL:
+{draft}
+"""
+    else:
+        final = draft
+
+    print("FINAL LENGTH:", len(final))
+
+    # 🚨 PAUSE HERE (ONLY ONCE)
     return interrupt({
-        "message": "Do you want to review this document?",
+        "message": "Review your document",
         "final_doc": final
     })
