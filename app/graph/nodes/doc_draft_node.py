@@ -4,16 +4,25 @@ def create_draft_node(state):
     pm_data = state.get("pm_data", {})
     feedback = state.get("user_feedback", "")
 
-    # ✅ NEW: TEMPLATE + HEADINGS
     template = state.get("template", "")
     selected_headings = state.get("selected_headings", [])
     pdf_headings = state.get("pdf_headings", [])
 
-    # fallback safety
     selected_headings = selected_headings or pdf_headings or []
 
     print("📄 Template:", template)
     print("📌 Selected Headings:", selected_headings)
+
+    conversation = pm_data.get("conversation", "")
+
+    # =====================================================
+    # 🧠 SIMPLE PROJECT NAME EXTRACTION
+    # =====================================================
+    project_name = "Software Project"
+    if "University Management System" in conversation:
+        project_name = "University Management System"
+
+    sections = []
 
     # =====================================================
     # 🆕 FIRST GENERATION
@@ -21,45 +30,56 @@ def create_draft_node(state):
     if not feedback:
         print("🆕 First generation")
 
-        sections = []
-
         for heading in selected_headings:
+
+            content = generate_section_content(
+                heading=heading,
+                conversation=conversation,
+                feedback=None
+            )
+
             sections.append(f"""
 ## {heading}
 
-Generated content for **{heading}** based on:
-{pm_data}
+{content}
 """)
 
         draft = f"""
-# {template} Document
+# Software Requirements Specification (SRS)
+
+## Project: {project_name}
+
+---
 
 {chr(10).join(sections)}
 """
 
     # =====================================================
-    # 🔁 REGENERATION (WITH FEEDBACK)
+    # 🔁 REGENERATION
     # =====================================================
     else:
         print("🔁 Regenerating with feedback")
 
-        sections = []
-
         for heading in selected_headings:
+
+            content = generate_section_content(
+                heading=heading,
+                conversation=conversation,
+                feedback=feedback
+            )
+
             sections.append(f"""
 ## {heading}
 
-Improved content for **{heading}**
-
-User Feedback:
-{feedback}
-
-Context:
-{pm_data}
+{content}
 """)
 
         draft = f"""
-# {template} Document (Revised)
+# Software Requirements Specification (SRS)
+
+## Project: {project_name}
+
+---
 
 {chr(10).join(sections)}
 """
