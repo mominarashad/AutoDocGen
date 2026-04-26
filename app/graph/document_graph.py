@@ -123,7 +123,7 @@ graph.add_conditional_edges(
 )
 
 # 🔁 EDIT → REGENERATE
-graph.add_edge("edit_section", "doc_draft")
+graph.add_edge("edit_section", "doc_finalize")
 
 # =====================================================
 # COMPILE GRAPH
