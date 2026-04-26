@@ -102,53 +102,26 @@ async def start_workflow(request: Request, payload: dict):
         }
     }
 
-    # 🔥 SAFE STATE TRACKING
-    result_state = {}
-
-    async for event in workflow.astream(state, config=config):
-
-        # ---------------- INTERRUPT ----------------
-        if isinstance(event, dict) and "__interrupt__" in event:
-            interrupt = event["__interrupt__"][0]
-
-            return {
-                "status": "waiting_for_user",
-                "interrupt": {
-                    "id": getattr(interrupt, "id", None),
-                    "value": {
-                        "message": interrupt.value.get("message"),
-                        "draft_doc": interrupt.value.get("draft_doc"),
-                        "final_doc": interrupt.value.get("final_doc")
-                    }
-                }
-            }
-
-        # ---------------- SAFE MERGE ----------------
-        if isinstance(event, dict):
-            for k, v in event.items():
-
-                # 🚨 prevent empty overwrite bug
-                if k == "final_doc" and v in ["", None]:
-                    continue
-
-                result_state[k] = v
-
     # ======================================================
-    # FINAL RESPONSE (FIXED EXTRACTION)
+    # 🔥 USE ainvoke (FINAL STATE GUARANTEED)
     # ======================================================
-    final_doc = result_state.get("final_doc")
+    result = await workflow.ainvoke(state, config=config)
 
+    print("🔥 FINAL WORKFLOW RESULT KEYS:", result.keys())
+    print("🔥 FINAL DOC RAW:", result.get("final_doc"))
+
+    final_doc = result.get("final_doc")
+
+    # handle dict structure from finalize node
     if isinstance(final_doc, dict):
         final_doc = final_doc.get("content", "")
 
     return {
         "status": "completed",
         "data": {
-            "final_doc": final_doc or result_state.get("draft_doc", "")
+            "final_doc": final_doc or result.get("draft_doc", "")
         }
     }
-
-
 # ======================================================
 # 🔁 RESUME WORKFLOW
 # ======================================================
