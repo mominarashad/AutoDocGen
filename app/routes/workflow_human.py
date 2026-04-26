@@ -141,7 +141,7 @@ async def resume_workflow(request: Request, payload: dict):
     project_id = payload.get("project_id")
     template = payload.get("template")
 
-    user_input = payload.get("user_input") or {}
+    user_input = payload.get("user_input", "")
 
     config = {
         "configurable": {
@@ -150,19 +150,14 @@ async def resume_workflow(request: Request, payload: dict):
     }
 
     result = await workflow.ainvoke(
-        Command(
-            resume={
-                "user_feedback": user_input.get("feedback", ""),
-                "new_headings": user_input.get("new_headings", [])
-            }
-        ),
+        Command(resume={
+            "user_feedback": user_input,
+            "new_headings": []
+        }),
         config=config
     )
 
     final_doc = result.get("final_doc", "")
-
-    if isinstance(final_doc, dict):
-        final_doc = final_doc.get("content", "")
 
     return {
         "status": "completed",
