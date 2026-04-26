@@ -5,13 +5,11 @@ from app.models.user_token_model import get_user_token
 from app.models.slack_model import get_slack_token
 from app.services.slack_service import fetch_channel_messages
 
-import os
-
 router = APIRouter(prefix="/workflow")
 
 
 # ======================================================
-# 🧠 BUILD STATE (ONLY FOR START)
+# 🧠 BUILD STATE
 # ======================================================
 async def build_state(payload: dict, db):
 
@@ -80,7 +78,7 @@ async def build_state(payload: dict, db):
 
 
 # ======================================================
-# 🚀 START WORKFLOW
+# 🚀 START WORKFLOW (FIXED)
 # ======================================================
 @router.post("/start")
 async def start_workflow(request: Request, payload: dict):
@@ -102,13 +100,13 @@ async def start_workflow(request: Request, payload: dict):
     }
 
     # ======================================================
-    # 🔥 FIXED LANGGRAPH LOOP (IMPORTANT PART)
+    # 🔥 SAFE STATE TRACKING (NO OVERWRITE BUG)
     # ======================================================
-    result = {}
+    result_state = state.copy()
 
     async for event in workflow.astream(state, config=config):
 
-        # ---------------- INTERRUPT HANDLING ----------------
+        # ---------------- INTERRUPT ----------------
         if isinstance(event, dict) and "__interrupt__" in event:
             interrupt = event["__interrupt__"][0]
 
@@ -124,9 +122,15 @@ async def start_workflow(request: Request, payload: dict):
                 }
             }
 
-        # ---------------- SAFE MERGE ----------------
+        # ---------------- MERGE SAFE STATE ----------------
         if isinstance(event, dict):
-            result.update(event)
+            for k, v in event.items():
+
+                # ❌ prevent empty overwrite bug
+                if k == "final_doc" and v in ["", None]:
+                    continue
+
+                result_state[k] = v
 
     # ======================================================
     # FINAL RESPONSE
@@ -134,7 +138,10 @@ async def start_workflow(request: Request, payload: dict):
     return {
         "status": "completed",
         "data": {
-            "final_doc": result.get("final_doc") or result.get("draft_doc", "")
+            "final_doc": (
+                result_state.get("final_doc")
+                or result_state.get("draft_doc", "")
+            )
         }
     }
 
