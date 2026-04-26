@@ -3,7 +3,7 @@ from langgraph.checkpoint.mongodb import MongoDBSaver
 from typing import TypedDict, Dict
 import os
 from pymongo import MongoClient
-
+from langgraph.types import interrupt
 from app.graph.nodes.pm_agent import fetch_pm_data_node
 from app.graph.nodes.doc_draft_node import create_draft_node
 from app.graph.nodes.doc_finalize_node import finalize_doc_node
@@ -60,6 +60,8 @@ def debug_doc_draft(state):
     return result
 
 
+
+
 def debug_finalize(state):
     print("\n🔥 [doc_finalize] ENTER")
 
@@ -67,9 +69,11 @@ def debug_finalize(state):
 
     print("🔥 [doc_finalize] FINAL LENGTH:", len(result.get("final_doc", "")))
 
-    print("🔥 [doc_finalize] EXIT")
-    return result
-
+    # 🔥 ASK HUMAN HERE (THIS IS THE KEY FIX)
+    return interrupt({
+        "message": "Do you want to review this document?",
+        "final_doc": result.get("final_doc", "")
+    })
 
 # =====================================================
 # GRAPH BUILD (CLEAN LINEAR FLOW - NO LOOP)
@@ -86,8 +90,7 @@ graph.add_edge(START, "pm_agent")
 graph.add_edge("pm_agent", "doc_draft")
 graph.add_edge("doc_draft", "doc_finalize")
 
-graph.add_edge("doc_finalize", "human_review")
-graph.add_edge("human_review", END)
+
 # =====================================================
 # COMPILE GRAPH
 # =====================================================
