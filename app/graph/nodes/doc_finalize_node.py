@@ -4,22 +4,24 @@ def finalize_doc_node(state):
     draft = state.get("draft_doc", "")
     feedback = state.get("user_feedback", "")
 
-    # ✅ CLEAN FINAL DOC STRUCTURE
     if feedback:
-        final = {
-            "content": draft,
-            "feedback_applied": feedback,
-            "status": "improved"
-        }
+        final_doc = f"""# FINAL DOCUMENT (IMPROVED)
+
+{draft}
+
+---
+
+## Feedback Applied:
+{feedback}
+"""
     else:
-        final = {
-            "content": draft,
-            "feedback_applied": None,
-            "status": "final"
-        }
+        final_doc = f"""# FINAL DOCUMENT
+
+{draft}
+"""
 
     print("🔥 [finalize_doc] EXIT")
 
     return {
-        "final_doc": final
+        "final_doc": final_doc   # ✅ MUST BE STRING
     }
