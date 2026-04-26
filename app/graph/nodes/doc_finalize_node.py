@@ -4,10 +4,7 @@ def finalize_doc_node(state):
     draft = state.get("draft_doc")
 
     if not draft:
-        print("❌ No draft_doc found in state")
-        return {
-            "final_doc": "⚠️ Error: No document generated"
-        }
+        return {"final_doc": "⚠️ No document generated"}
 
     feedback = state.get("user_feedback", "")
 
@@ -27,9 +24,4 @@ def finalize_doc_node(state):
 {draft}
 """
 
-    print("🔥 [finalize_doc] FINAL LENGTH:", len(final_doc))
-    print("🔥 [finalize_doc] EXIT")
-
-    return {
-        "final_doc": final_doc
-    }
+    return {"final_doc": final_doc}
