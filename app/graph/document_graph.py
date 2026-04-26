@@ -38,6 +38,7 @@ class WorkflowState(TypedDict, total=False):
     review_status: str   
     pdf_headings: list        # ✅ ADD
     selected_headings: list   # ✅ ADD
+    new_headings: list
 
 graph = StateGraph(WorkflowState)
 
@@ -89,6 +90,12 @@ graph.add_node("human_review", human_review_node)
 graph.add_edge(START, "pm_agent")
 graph.add_edge("pm_agent", "doc_draft")
 graph.add_edge("doc_draft", "doc_finalize")
+
+# 🔥 ADD HUMAN REVIEW STEP
+graph.add_edge("doc_finalize", "human_review")
+
+# 🔥 LOOP BACK FOR REGENERATION
+graph.add_edge("human_review", "doc_draft")
 
 graph.add_edge("doc_finalize", END)
 
