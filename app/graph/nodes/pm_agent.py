@@ -61,8 +61,8 @@ def fetch_pm_data_node(state: dict) -> dict:
     if source != "trello":
         raise ValueError(f"Unknown source: {source}")
 
-    trello_key = state.get("user_trello_key")
-    trello_token = state.get("user_trello_token")
+    trello_key = state.get("user_trello_key") or os.getenv("TRELLO_API_KEY")
+    trello_token = state.get("user_trello_token") or os.getenv("TRELLO_TOKEN")
 
     project_id = state.get("project_id") or state.get("board_id")
     project_name = state.get("project_name")
