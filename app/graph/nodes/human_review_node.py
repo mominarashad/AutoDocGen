@@ -6,16 +6,19 @@ def human_review_node(state):
     final_doc = state.get("final_doc", "")
 
     result = interrupt({
-        "message": "Review document. You may optionally send feedback or new headings.",
+        "message": "Review document. You can optionally add feedback or new headings.",
         "final_doc": final_doc
     })
 
+    new_headings = result.get("new_headings", []) or []
+    selected_headings = state.get("selected_headings", [])
+
+    # 🔥 MERGE HEADINGS (IMPORTANT FIX)
+    merged_headings = list(dict.fromkeys(selected_headings + new_headings))
+
     return {
         "user_feedback": result.get("user_feedback", "") or "",
-        "new_headings": result.get("new_headings", []) or [],
-        "pdf_headings": state.get("pdf_headings", []),
-        "selected_headings": (
-            state.get("selected_headings", []) +
-            result.get("new_headings", [])
-        )
+        "new_headings": new_headings,
+        "selected_headings": merged_headings,
+        "pdf_headings": state.get("pdf_headings", [])
     }
