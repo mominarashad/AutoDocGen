@@ -54,10 +54,11 @@ def create_docs_node(state):
     cleaned_pm_data = str(pm_data)
 
     docs = generate_documentation(
-        cleaned_pm_data,
-        pdf_headings,
-        selected_headings
-    )
+    cleaned_pm_data,
+    pdf_headings,
+    selected_headings,
+    template=state.get("template", "")
+)
 
     return {
         "draft_doc": docs
