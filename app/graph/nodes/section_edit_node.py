@@ -103,12 +103,12 @@ STRICT RULES:
     return {
     "draft_doc": updated_doc,
 
-    
+    # keep required state
     "pm_data": state.get("pm_data"),
     "pdf_headings": state.get("pdf_headings"),
     "selected_headings": state.get("selected_headings"),
 
-    
+    # 🔥 MUST CLEAR
     "user_feedback": "",
     "new_headings": []
 }
