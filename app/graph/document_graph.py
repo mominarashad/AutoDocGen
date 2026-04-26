@@ -109,9 +109,16 @@ graph.add_node("human_review", human_review_node)
 graph.add_edge(START, "pm_agent")
 graph.add_edge("pm_agent", "doc_draft")
 graph.add_edge("doc_draft", "doc_finalize")
+
+# review step
 graph.add_edge("doc_finalize", "human_review")
 
-# 🔥 CONDITIONAL LOOP (NOT ALWAYS LOOP)
+# ONLY LOOP BACK IF USER GAVE FEEDBACK OR HEADINGS
+def route_after_review(state):
+    if state.get("user_feedback") or state.get("new_headings"):
+        return "doc_draft"
+    return END
+
 graph.add_conditional_edges(
     "human_review",
     route_after_review
