@@ -1,13 +1,14 @@
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.mongodb import MongoDBSaver
-from typing import TypedDict, Dict
+from typing import TypedDict, Dict, List, Optional
 import os
 from pymongo import MongoClient
-from langgraph.types import interrupt
+
 from app.graph.nodes.pm_agent import fetch_pm_data_node
 from app.graph.nodes.doc_agent import create_docs_node
 from app.graph.nodes.doc_finalize_node import finalize_doc_node
 from app.graph.nodes.human_review_node import human_review_node
+
 
 # =====================================================
 # MONGODB CHECKPOINTER
@@ -35,10 +36,12 @@ class WorkflowState(TypedDict, total=False):
     final_doc: str
 
     user_feedback: str
-    review_status: str   
-    pdf_headings: list        # ✅ ADD
-    selected_headings: list   # ✅ ADD
-    new_headings: list
+    review_status: str
+
+    pdf_headings: List[str]
+    selected_headings: List[str]
+    new_headings: List[str]
+
 
 graph = StateGraph(WorkflowState)
 
@@ -46,7 +49,6 @@ graph = StateGraph(WorkflowState)
 # =====================================================
 # DEBUG WRAPPERS
 # =====================================================
-
 def debug_pm_agent(state):
     print("\n🔥 [pm_agent] ENTER")
     result = fetch_pm_data_node(state)
@@ -57,14 +59,12 @@ def debug_pm_agent(state):
 def debug_doc_draft(state):
     print("\n🔥 [doc_draft] ENTER")
 
-    result = create_draft_node(state)
+    result = create_docs_node(state)
 
     print("🔥 [doc_draft] GENERATED LENGTH:", len(result.get("draft_doc", "")))
 
     print("🔥 [doc_draft] EXIT")
     return result
-
-
 
 
 def debug_finalize(state):
@@ -76,32 +76,51 @@ def debug_finalize(state):
 
     return result
 
+
 # =====================================================
-# GRAPH BUILD (CLEAN LINEAR FLOW - NO LOOP)
+# ROUTING LOGIC (🔥 IMPORTANT FIX)
 # =====================================================
+def route_after_review(state):
+    """
+    Decide whether to regenerate doc or finish workflow
+    """
+
+    feedback = state.get("user_feedback", "")
+    new_headings = state.get("new_headings", [])
+
+    if feedback or new_headings:
+        print("🔁 Regenerating document (feedback/new headings detected)")
+        return "doc_draft"
+
+    print("✅ No changes requested → END workflow")
+    return END
 
 
+# =====================================================
+# GRAPH BUILD
+# =====================================================
 
 graph.add_node("pm_agent", debug_pm_agent)
-graph.add_node("doc_draft", create_docs_node)
+graph.add_node("doc_draft", debug_doc_draft)
 graph.add_node("doc_finalize", debug_finalize)
 graph.add_node("human_review", human_review_node)
 
+# MAIN FLOW
 graph.add_edge(START, "pm_agent")
 graph.add_edge("pm_agent", "doc_draft")
 graph.add_edge("doc_draft", "doc_finalize")
-
-# 🔥 ADD HUMAN REVIEW STEP
 graph.add_edge("doc_finalize", "human_review")
 
-# 🔥 LOOP BACK FOR REGENERATION
-graph.add_edge("human_review", "doc_draft")
+# 🔥 CONDITIONAL LOOP (NOT ALWAYS LOOP)
+graph.add_conditional_edges(
+    "human_review",
+    route_after_review
+)
 
-graph.add_edge("doc_finalize", END)
 
 # =====================================================
 # COMPILE GRAPH
 # =====================================================
 workflow = graph.compile(checkpointer=checkpointer)
 
-print("🔥 GRAPH COMPILED SUCCESSFULLY (NO LOOP, NO HUMAN NODE)")
+print("🔥 GRAPH COMPILED SUCCESSFULLY (HUMAN LOOP ENABLED SAFE MODE)")
