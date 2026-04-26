@@ -19,10 +19,17 @@ async def build_state(payload: dict, db):
     project_id = payload.get("project_id")
     source = payload.get("source")
     team_id = payload.get("team_id")
-    template = payload.get("template", "")
+
+    # ✅ NEW FIELDS
+    template = payload.get("template", "").strip()
+    pdf_headings = payload.get("pdf_headings", [])
+    selected_headings = payload.get("selected_headings", [])
 
     if not user_id or not project_id:
         raise ValueError("Missing user_id or project_id")
+
+    if not template:
+        raise ValueError("Template is required")
 
     pm_data = {}
 
@@ -60,17 +67,21 @@ async def build_state(payload: dict, db):
             "board_id": project_id
         }
 
+    #  RETURN FULL STATE INCLUDING HEADINGS + TEMPLATE
     return WorkflowState(
         project_id=project_id,
         user_id=user_id,
         template=template,
+
         pm_data=pm_data,
+
+        pdf_headings=pdf_headings,
+        selected_headings=selected_headings,
+
         draft_doc="",
-        reviewed_doc="",
         final_doc="",
         user_feedback=""
     )
-
 
 # ======================================================
 # 🚀 START WORKFLOW (FIRST GENERATION)
@@ -79,6 +90,14 @@ async def build_state(payload: dict, db):
 async def start_workflow(request: Request, payload: dict):
 
     db = request.app.state.db
+
+    # ✅ BASIC VALIDATION (IMPORTANT)
+    if not payload.get("template"):
+        return {"status": "error", "message": "Template selection required"}
+
+    if not payload.get("selected_headings"):
+        return {"status": "error", "message": "Please select at least one heading"}
+
     state = await build_state(payload, db)
 
     config = {
@@ -91,14 +110,8 @@ async def start_workflow(request: Request, payload: dict):
 
     async for event in workflow.astream(state, config=config):
 
-        print("🔥 EVENT:", event)
-
-        # ================= INTERRUPT HANDLING =================
         if isinstance(event, dict) and "__interrupt__" in event:
-
             interrupt = event["__interrupt__"][0]
-
-            print("🧠 INTERRUPT VALUE:", interrupt.value)
 
             return {
                 "status": "waiting_for_user",
@@ -118,7 +131,6 @@ async def start_workflow(request: Request, payload: dict):
         "status": "completed",
         "data": result
     }
-
 
 # ======================================================
 # 🔁 RESUME WORKFLOW (FIXED - NO REBUILD STATE)
