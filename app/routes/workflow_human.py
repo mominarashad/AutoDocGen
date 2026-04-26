@@ -73,7 +73,7 @@ async def build_state(payload: dict, db):
         project_name = f"Trello Project {project_id}"
 
     # ======================================================
-    # 🔥 IMPORTANT FIX (ADD TREllo KEYS FOR pm_agent)
+    # 🔥 RETURN STATE
     # ======================================================
     return WorkflowState(
         project_id=project_id,
@@ -89,7 +89,6 @@ async def build_state(payload: dict, db):
         final_doc="",
         user_feedback="",
 
-        # 🔥 FIX: REQUIRED BY pm_agent NODE
         user_trello_key=os.getenv("TRELLO_API_KEY", ""),
         user_trello_token=os.getenv("TRELLO_TOKEN", "")
     )
@@ -141,7 +140,7 @@ async def resume_workflow(request: Request, payload: dict):
     user_id = payload.get("user_id")
     project_id = payload.get("project_id")
     template = payload.get("template")
-    user_input = payload.get("user_input")
+    user_input = payload.get("user_input", {})
 
     config = {
         "configurable": {
@@ -150,9 +149,12 @@ async def resume_workflow(request: Request, payload: dict):
     }
 
     result = await workflow.ainvoke(
-        Command(update={
-            "user_feedback": user_input
-        }),
+        Command(
+            resume={
+                "user_feedback": user_input.get("feedback", ""),
+                "new_headings": user_input.get("new_headings", [])
+            }
+        ),
         config=config
     )
 
