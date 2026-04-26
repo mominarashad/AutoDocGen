@@ -1,23 +1,28 @@
 def create_draft_node(state):
-    pm_data = state.get("pm_data", {})
-    feedback = state.get("reviewed_doc")
+    print("🔥 [doc_draft] ENTER")
+
+    pm_data = state.get("pm_data")
+    feedback = state.get("user_feedback")
 
     if feedback:
-        draft = f"""
-        Regenerated Document (based on feedback):
-        Feedback:
-        {feedback}
+        print("🔁 Regenerating with feedback")
 
-        Original Data:
-        {pm_data}
-        """
+        draft = f"""
+Improved Document:
+
+User Feedback:
+{feedback}
+
+Data:
+{pm_data}
+"""
     else:
-        draft = f"""
-        Initial Draft:
-        {pm_data}
-        """
+        print("🆕 First generation")
 
-    return {
-        **state,
-        "draft_doc": draft
-    }
+        draft = f"""
+Initial Document:
+
+{pm_data}
+"""
+
+    return {"draft_doc": draft}
