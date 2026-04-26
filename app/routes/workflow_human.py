@@ -123,6 +123,8 @@ async def start_workflow(request: Request, payload: dict):
 # ======================================================
 # 🔁 RESUME WORKFLOW (FIXED - NO REBUILD STATE)
 # ======================================================
+
+
 @router.post("/resume")
 async def resume_workflow(request: Request, payload: dict):
 
@@ -131,22 +133,15 @@ async def resume_workflow(request: Request, payload: dict):
     template = payload.get("template")
     user_input = payload.get("user_input")
 
-    if not user_id or not project_id:
-        raise ValueError("Missing user_id or project_id")
-
     config = {
         "configurable": {
             "thread_id": f"{user_id}_{project_id}_{template}"
         }
     }
 
-    # ======================================================
-    # IMPORTANT: ONLY UPDATE STATE, DO NOT REBUILD
-    # ======================================================
+    # ✅ THIS IS THE CORRECT WAY
     result = await workflow.ainvoke(
-        Command(update={
-            "user_feedback": user_input
-        }),
+        Command(resume=user_input),
         config=config
     )
 
