@@ -45,6 +45,9 @@ async def build_state(payload: dict, db):
             for m in messages if m.get("text")
         )
 
+        print("🧪 SLACK CONVERSATION PREVIEW:")
+        print(conversation[:1000])
+
         pm_data = {
             "source": "slack",
             "team_id": team_id,
@@ -78,7 +81,7 @@ async def build_state(payload: dict, db):
 
 
 # ======================================================
-# 🚀 START WORKFLOW (FIXED)
+# 🚀 START WORKFLOW (FIXED & SAFE MERGE)
 # ======================================================
 @router.post("/start")
 async def start_workflow(request: Request, payload: dict):
@@ -99,10 +102,8 @@ async def start_workflow(request: Request, payload: dict):
         }
     }
 
-    # ======================================================
-    # 🔥 SAFE STATE TRACKING (NO OVERWRITE BUG)
-    # ======================================================
-    result_state = state.copy()
+    # 🔥 SAFE STATE TRACKING
+    result_state = {}
 
     async for event in workflow.astream(state, config=config):
 
@@ -122,26 +123,28 @@ async def start_workflow(request: Request, payload: dict):
                 }
             }
 
-        # ---------------- MERGE SAFE STATE ----------------
+        # ---------------- SAFE MERGE ----------------
         if isinstance(event, dict):
             for k, v in event.items():
 
-                # ❌ prevent empty overwrite bug
+                # 🚨 prevent empty overwrite bug
                 if k == "final_doc" and v in ["", None]:
                     continue
 
                 result_state[k] = v
 
     # ======================================================
-    # FINAL RESPONSE
+    # FINAL RESPONSE (FIXED EXTRACTION)
     # ======================================================
+    final_doc = result_state.get("final_doc")
+
+    if isinstance(final_doc, dict):
+        final_doc = final_doc.get("content", "")
+
     return {
         "status": "completed",
         "data": {
-            "final_doc": (
-                result_state.get("final_doc")
-                or result_state.get("draft_doc", "")
-            )
+            "final_doc": final_doc or result_state.get("draft_doc", "")
         }
     }
 
@@ -170,9 +173,14 @@ async def resume_workflow(request: Request, payload: dict):
         config=config
     )
 
+    final_doc = result.get("final_doc", "")
+
+    if isinstance(final_doc, dict):
+        final_doc = final_doc.get("content", "")
+
     return {
         "status": "completed",
         "data": {
-            "final_doc": result.get("final_doc", "")
+            "final_doc": final_doc
         }
     }
