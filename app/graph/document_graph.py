@@ -82,20 +82,21 @@ def debug_finalize(state):
 # ROUTING LOGIC (🔥 CORE FIX)
 # =====================================================
 def route_after_review(state):
-    intent = state.get("intent")
+    feedback = state.get("user_feedback", "")
     new_headings = state.get("new_headings", [])
 
-    if intent == "new_heading" or new_headings:
-        print("➕ New heading → regenerate")
+    if new_headings:
+        print("➕ New headings → regenerate full doc")
         return "doc_draft"
 
-    if intent == "edit_section":
-        print("✏️ Edit section")
-        return "edit_section"
-
-    if intent == "regenerate":
-        print("🔁 Full regeneration")
-        return "doc_draft"
+    if feedback:
+        # 🔥 SMART SPLIT
+        if len(feedback.split()) < 15:
+            print("✏️ Short feedback → edit section")
+            return "edit_section"
+        else:
+            print("🔁 Long feedback → regenerate")
+            return "doc_draft"
 
     print("✅ No changes → END")
     return END
