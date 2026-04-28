@@ -130,6 +130,16 @@ async def start_workflow(request: Request, payload: dict):
         }
     }
 
+def classify_user_intent(feedback: str):
+    text = feedback.lower()
+
+    if "add:" in text or "new heading" in text:
+        return "new_heading"
+
+    if "in section" in text or "in heading" in text or "add definition" in text or "update" in text:
+        return "edit_section"
+
+    return "regenerate"
 
 # ======================================================
 # 🔁 RESUME WORKFLOW
@@ -149,13 +159,16 @@ async def resume_workflow(request: Request, payload: dict):
         }
     }
 
+    intent = classify_user_intent(user_input)
+
     result = await workflow.ainvoke(
-        Command(resume={
-            "user_feedback": user_input,
-            "new_headings": []
-        }),
-        config=config
-    )
+         Command(resume={
+             "user_feedback": user_input,
+             "intent": intent,
+             "new_headings": payload.get("new_headings", [])
+            }),
+         config=config
+)
 
     final_doc = result.get("final_doc", "")
 
