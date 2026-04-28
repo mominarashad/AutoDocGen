@@ -40,6 +40,7 @@ class WorkflowState(TypedDict, total=False):
     pdf_headings: List[str]
     selected_headings: List[str]
     new_headings: List[str]
+    intent: str
 
 # =====================================================
 # GRAPH INIT
@@ -81,20 +82,23 @@ def debug_finalize(state):
 # ROUTING LOGIC (🔥 CORE FIX)
 # =====================================================
 def route_after_review(state):
-    feedback = state.get("user_feedback", "")
+    intent = state.get("intent")
     new_headings = state.get("new_headings", [])
 
-    if new_headings:
-        print("🔁 New headings → regenerate full doc")
+    if intent == "new_heading" or new_headings:
+        print("➕ New heading → regenerate")
         return "doc_draft"
 
-    if feedback:
-        print("✏️ Feedback → edit section")
+    if intent == "edit_section":
+        print("✏️ Edit section")
         return "edit_section"
+
+    if intent == "regenerate":
+        print("🔁 Full regeneration")
+        return "doc_draft"
 
     print("✅ No changes → END")
     return END
-
 # =====================================================
 # GRAPH BUILD
 # =====================================================
