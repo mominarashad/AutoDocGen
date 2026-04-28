@@ -65,7 +65,7 @@ Return ONLY valid JSON.
 
 
 # ==========================================================
-# 🎯 SMART SECTION MATCHING (NO HARDCODE)
+# 🎯 SMART SECTION MATCHING (IMPROVED SCORING)
 # ==========================================================
 def find_best_section(sections, parsed):
     keywords = parsed.get("keywords", [])
@@ -74,14 +74,19 @@ def find_best_section(sections, parsed):
     best_score = 0
 
     for heading in sections.keys():
-        score = sum(1 for k in keywords if k.lower() in heading.lower())
+        score = sum(
+            2 if k.lower() in heading.lower()
+            else 1 if k.lower() in sections[heading].lower()
+            else 0
+            for k in keywords
+        )
 
         if score > best_score:
             best_score = score
             best_match = heading
 
-    # fallback → if nothing matches, take last used context
-    return best_match or list(sections.keys())[-1]
+    # fallback → if nothing matches, take last section
+    return best_match or (list(sections.keys())[-1] if sections else None)
 
 
 # ==========================================================
@@ -125,6 +130,10 @@ def edit_section_node(state):
     # 2. SPLIT DOC
     # ======================================================
     sections = split_into_sections(draft_doc)
+
+    if not sections:
+        print("❌ No sections found in document")
+        return state
 
     # ======================================================
     # 3. FIND TARGET SECTION (SMART)
