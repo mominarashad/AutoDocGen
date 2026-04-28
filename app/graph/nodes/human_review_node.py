@@ -17,8 +17,9 @@ def human_review_node(state):
     merged_headings = list(dict.fromkeys(selected_headings + new_headings))
 
     return {
-        "user_feedback": result.get("user_feedback", "") or "",
-        "new_headings": new_headings,
-        "selected_headings": merged_headings,
-        "pdf_headings": state.get("pdf_headings", [])
-    }
+    "user_feedback": result.get("user_feedback", "") or "",
+    "new_headings": new_headings,
+    "intent": result.get("intent", "regenerate"),  
+    "selected_headings": merged_headings,
+    "pdf_headings": state.get("pdf_headings", [])
+}
