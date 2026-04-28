@@ -4,13 +4,14 @@ import re
 
 
 # ==========================================================
-# 🧠 LLM DOCUMENT GENERATION
+# 🧠 LLM DOCUMENT GENERATION (UPDATED WITH FEEDBACK SUPPORT)
 # ==========================================================
 def generate_documentation(
     cleaned_pm_data: str,
     pdf_headings: list,
     selected_headings: list,
-    template: str
+    template: str,
+    user_feedback: str = ""   # 🔥 NEW
 ):
 
     prompt = load_prompt_from_langsmith("doc_prompt_pdf_selected")
@@ -18,6 +19,9 @@ def generate_documentation(
 
     chain = prompt | llm
 
+    # ======================================================
+    # 🔒 STRICT SYSTEM INSTRUCTIONS
+    # ======================================================
     strict_instruction = f"""
 YOU ARE A STRUCTURED DOCUMENT GENERATION ENGINE.
 
@@ -33,8 +37,30 @@ IMPORTANT RULES:
 DO NOT force irrelevant sections (like SRS sections in WBS).
 """
 
+    # ======================================================
+    # 🔥 FEEDBACK INJECTION (CORE FIX)
+    # ======================================================
+    feedback_block = ""
+    if user_feedback:
+        feedback_block = f"""
+
+USER FEEDBACK (MUST BE APPLIED):
+{user_feedback}
+
+INSTRUCTIONS:
+- Apply the feedback strictly
+- If feedback refers to a specific section (e.g., 1.3), modify ONLY that section
+- If feedback is general, improve the entire document accordingly
+- Do NOT ignore feedback
+"""
+
+    # ======================================================
+    # 🧠 FINAL INPUT TO MODEL
+    # ======================================================
+    final_input = strict_instruction + feedback_block + "\n\nDATA:\n" + cleaned_pm_data
+
     result = chain.invoke({
-        "cleaned_pm_data": strict_instruction + "\n\nDATA:\n" + cleaned_pm_data,
+        "cleaned_pm_data": final_input,
         "pdf_headings": pdf_headings,
         "selected_headings": selected_headings
     })
@@ -75,7 +101,7 @@ def convert_to_sections(text: str):
 
 
 # ==========================================================
-# 🧠 NODE
+# 🧠 NODE (UPDATED)
 # ==========================================================
 def create_docs_node(state):
 
@@ -83,6 +109,9 @@ def create_docs_node(state):
     pdf_headings = state.get("pdf_headings", [])
     selected_headings = state.get("selected_headings", [])
     template = state.get("template", "")
+
+    # 🔥 NEW: get feedback
+    user_feedback = state.get("user_feedback", "")
 
     if not pm_data:
         return {
@@ -93,21 +122,22 @@ def create_docs_node(state):
     cleaned_pm_data = str(pm_data)
 
     # ======================================================
-    # GENERATE DOCUMENT
+    # 🚀 GENERATE DOCUMENT (WITH FEEDBACK)
     # ======================================================
     docs = generate_documentation(
         cleaned_pm_data,
         pdf_headings,
         selected_headings,
-        template=template
+        template=template,
+        user_feedback=user_feedback   # 🔥 PASS FEEDBACK
     )
 
     # ======================================================
-    # CONVERT TO STRUCTURED SECTIONS
+    # 🧩 CONVERT TO STRUCTURED SECTIONS
     # ======================================================
     sections = convert_to_sections(docs)
 
     return {
         "draft_doc": docs,        # backward compatibility
-        "sections": sections      # 🔥 NEW (for smart editing)
+        "sections": sections      # 🔥 structured editing support
     }
