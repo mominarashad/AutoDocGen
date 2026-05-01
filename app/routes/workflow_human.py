@@ -4,13 +4,14 @@ from app.graph.document_graph import workflow, WorkflowState
 from app.models.user_token_model import get_user_token
 from app.models.slack_model import get_slack_token
 from app.services.slack_service import fetch_channel_messages
+from app.services.doc_storage_service import save_generated_doc  # ✅ USED NOW
 import os
 
 router = APIRouter(prefix="/workflow")
 
 
 # ======================================================
-# 🧠 BUILD STATE (MAIN INTELLIGENCE LAYER)
+# 🧠 BUILD STATE
 # ======================================================
 async def build_state(payload: dict, db):
 
@@ -72,9 +73,6 @@ async def build_state(payload: dict, db):
 
         project_name = f"Trello Project {project_id}"
 
-    # ======================================================
-    # 🔥 RETURN STATE
-    # ======================================================
     return WorkflowState(
         project_id=project_id,
         user_id=user_id,
@@ -123,6 +121,20 @@ async def start_workflow(request: Request, payload: dict):
     if isinstance(final_doc, dict):
         final_doc = final_doc.get("content", "")
 
+    # ======================================================
+    # ✅ SAVE TO DB (MAIN FIX)
+    # ======================================================
+    await save_generated_doc(
+        db=db,
+        user_id=state["user_id"],
+        project_id=state["project_id"],
+        template_name=state["template"],
+        generated_doc=final_doc,
+        source=state["pm_data"].get("source"),
+        team_id=state["pm_data"].get("team_id"),
+        board_name=state["project_id"]
+    )
+
     return {
         "status": "completed",
         "data": {
@@ -130,22 +142,29 @@ async def start_workflow(request: Request, payload: dict):
         }
     }
 
+
+# ======================================================
+# 🧠 INTENT CLASSIFIER
+# ======================================================
 def classify_user_intent(feedback: str):
     text = feedback.lower()
 
     if "add:" in text or "new heading" in text:
         return "new_heading"
 
-    if "in section" in text or "in heading" in text or "add definition" in text or "update" in text:
+    if "in section" in text or "in heading" in text or "update" in text:
         return "edit_section"
 
     return "regenerate"
+
 
 # ======================================================
 # 🔁 RESUME WORKFLOW
 # ======================================================
 @router.post("/resume")
 async def resume_workflow(request: Request, payload: dict):
+
+    db = request.app.state.db
 
     user_id = payload.get("user_id")
     project_id = payload.get("project_id")
@@ -162,15 +181,29 @@ async def resume_workflow(request: Request, payload: dict):
     intent = classify_user_intent(user_input)
 
     result = await workflow.ainvoke(
-         Command(resume={
-             "user_feedback": user_input,
-             "intent": intent,
-             "new_headings": payload.get("new_headings", [])
-            }),
-         config=config
-)
+        Command(resume={
+            "user_feedback": user_input,
+            "intent": intent,
+            "new_headings": payload.get("new_headings", [])
+        }),
+        config=config
+    )
 
     final_doc = result.get("final_doc", "")
+
+    # ======================================================
+    # ✅ SAVE UPDATED VERSION (VERSIONING SUPPORT)
+    # ======================================================
+    await save_generated_doc(
+        db=db,
+        user_id=user_id,
+        project_id=project_id,
+        template_name=template,
+        generated_doc=final_doc,
+        source="update",
+        team_id=None,
+        board_name=project_id
+    )
 
     return {
         "status": "completed",
