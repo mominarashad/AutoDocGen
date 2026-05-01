@@ -129,7 +129,7 @@ def edit_section_node(state):
     # ======================================================
     # 2. SPLIT DOC
     # ======================================================
-    sections = split_into_sections(draft_doc)
+    sections = state.get("sections") or split_into_sections(draft_doc)
 
     if not sections:
         print("❌ No sections found in document")
