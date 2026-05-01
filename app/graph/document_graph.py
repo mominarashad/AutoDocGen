@@ -84,6 +84,8 @@ def debug_finalize(state):
 def route_after_review(state):
     feedback = state.get("user_feedback", "")
     new_headings = state.get("new_headings", [])
+    if state.get("finalized"):
+        return END
 
     if new_headings:
         print("➕ New headings → regenerate full doc")
