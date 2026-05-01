@@ -40,7 +40,10 @@ async def save_generated_doc(
     "version": next_version,
     "source": source,
     "team_id": team_id,
-    "is_final": is_final,   
+
+    # ✅ ADD THIS (IMPORTANT)
+    "board_name": project_id,  # fallback OR pass real name from API
+
     "created_at": datetime.utcnow()
 })
 
