@@ -6,6 +6,7 @@ from app.models.slack_model import get_slack_token
 from app.services.slack_service import fetch_channel_messages
 from app.services.doc_storage_service import save_generated_doc
 import os
+from app.services.trello_service import get_board_name
 
 router = APIRouter(prefix="/workflow")
 
@@ -112,6 +113,12 @@ async def start_workflow(request: Request, payload: dict):
 
     final_result = None
 
+    board_name = await get_board_name(
+    user_id=state["user_id"],
+    project_id=state["project_id"],
+    db=db
+)
+
     # ======================================================
     # 🔥 STREAM EXECUTION (CRITICAL FIX)
     # ======================================================
@@ -148,15 +155,15 @@ async def start_workflow(request: Request, payload: dict):
         is_final = final_result.get("is_final", False)
 
     await save_generated_doc(
-        db=db,
-        user_id=state["user_id"],
-        project_id=state["project_id"],
-        template_name=state["template"],
-        content=final_doc,
-        source=state["pm_data"].get("source"),
-        team_id=state["pm_data"].get("team_id"),
-        is_final=is_final
-    )
+       db=db,
+       user_id=state["user_id"],
+       project_id=state["project_id"],
+       template_name=state["template"],
+       content=final_doc,
+       source=state["pm_data"].get("source"),
+       team_id=state["pm_data"].get("team_id"),
+       board_name=board_name   
+)
 
     return {
         "status": "completed",
