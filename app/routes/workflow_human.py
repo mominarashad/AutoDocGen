@@ -4,7 +4,7 @@ from app.graph.document_graph import workflow, WorkflowState
 from app.models.user_token_model import get_user_token
 from app.models.slack_model import get_slack_token
 from app.services.slack_service import fetch_channel_messages
-from app.services.doc_storage_service import save_generated_doc  
+from app.services.doc_storage_service import save_generated_doc
 import os
 
 router = APIRouter(prefix="/workflow")
@@ -77,16 +77,12 @@ async def build_state(payload: dict, db):
         project_id=project_id,
         user_id=user_id,
         template=template,
-
         pm_data=pm_data,
-
         pdf_headings=pdf_headings,
         selected_headings=selected_headings,
-
         draft_doc="",
         final_doc="",
         user_feedback="",
-
         user_trello_key=os.getenv("TRELLO_API_KEY", ""),
         user_trello_token=os.getenv("TRELLO_TOKEN", "")
     )
@@ -130,7 +126,6 @@ async def start_workflow(request: Request, payload: dict):
                 "interrupt": interrupt
             }
 
-        # keep last state
         if isinstance(event, dict):
             final_result = event
 
@@ -146,8 +141,12 @@ async def start_workflow(request: Request, payload: dict):
         final_doc = final_doc.get("content", "")
 
     # ======================================================
-    # 💾 SAVE ONLY FINAL (NO INTERRUPT CASE)
+    # 💾 SAVE ONLY FINAL (WITH FINAL FLAG SUPPORT)
     # ======================================================
+    is_final = False
+    if final_result:
+        is_final = final_result.get("is_final", False)
+
     await save_generated_doc(
         db=db,
         user_id=state["user_id"],
@@ -156,6 +155,7 @@ async def start_workflow(request: Request, payload: dict):
         content=final_doc,
         source=state["pm_data"].get("source"),
         team_id=state["pm_data"].get("team_id"),
+        is_final=is_final
     )
 
     return {
@@ -164,6 +164,7 @@ async def start_workflow(request: Request, payload: dict):
             "final_doc": final_doc
         }
     }
+
 
 # ======================================================
 # 🧠 INTENT CLASSIFIER
@@ -214,7 +215,12 @@ async def resume_workflow(request: Request, payload: dict):
     final_doc = result.get("final_doc", "")
 
     # ======================================================
-    # ✅ SAVE UPDATED VERSION (VERSIONING SUPPORT)
+    # 🟢 GREEN FLAG SUPPORT (FINAL FLAG)
+    # ======================================================
+    is_final = payload.get("is_final", False)
+
+    # ======================================================
+    # ✅ SAVE UPDATED VERSION (VERSIONING FIXED)
     # ======================================================
     await save_generated_doc(
         db=db,
@@ -222,9 +228,9 @@ async def resume_workflow(request: Request, payload: dict):
         project_id=project_id,
         template_name=template,
         content=final_doc,
-        source="update",
-        team_id=None,
-        board_name=project_id
+        source=payload.get("source", "trello"),
+        team_id=payload.get("team_id"),
+        is_final=is_final
     )
 
     return {
