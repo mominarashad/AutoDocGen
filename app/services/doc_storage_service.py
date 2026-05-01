@@ -43,3 +43,27 @@ async def save_generated_doc(
     })
 
     print(f"✅ Document saved (v{next_version})")
+
+def split_into_sections(doc: str):
+    import re
+
+    sections = {}
+    current_heading = None
+    buffer = []
+
+    for line in doc.split("\n"):
+        line_strip = line.strip()
+
+        if re.match(r"^#+\s*\d+(\.\d+)*", line_strip):
+            if current_heading:
+                sections[current_heading] = "\n".join(buffer).strip()
+                buffer = []
+
+            current_heading = line_strip
+        else:
+            buffer.append(line)
+
+    if current_heading:
+        sections[current_heading] = "\n".join(buffer).strip()
+
+    return sections
