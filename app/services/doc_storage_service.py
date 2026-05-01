@@ -36,6 +36,7 @@ async def save_generated_doc(
         "project_id": project_id,
         "template_name": template_name,
         "generated_docs": content,
+        "sections": split_into_sections(content),   
         "version": next_version,
         "source": source,
         "team_id": team_id,
