@@ -121,19 +121,15 @@ async def start_workflow(request: Request, payload: dict):
     if isinstance(final_doc, dict):
         final_doc = final_doc.get("content", "")
 
-    # ======================================================
-    # ✅ SAVE TO DB (MAIN FIX)
-    # ======================================================
     await save_generated_doc(
-        db=db,
-        user_id=state["user_id"],
-        project_id=state["project_id"],
-        template_name=state["template"],
-        generated_doc=final_doc,
-        source=state["pm_data"].get("source"),
-        team_id=state["pm_data"].get("team_id"),
-        board_name=state["project_id"]
-    )
+    db=db,
+    user_id=state["user_id"],
+    project_id=state["project_id"],
+    template_name=state["template"],
+    content=final_doc,   # ✅ FIXED
+    source=state["pm_data"].get("source"),
+    team_id=state["pm_data"].get("team_id"),
+)
 
     return {
         "status": "completed",
