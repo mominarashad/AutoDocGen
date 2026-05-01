@@ -8,7 +8,8 @@ async def save_generated_doc(
     template_name: str,
     content: str,
     source: str = "trello",
-    team_id: str = None
+    team_id: str = None,
+    is_final: bool = False   
 ):
     collection = db["generated_docs"]
 
@@ -32,16 +33,16 @@ async def save_generated_doc(
     # 💾 SAVE DOCUMENT
     # ======================================================
     await collection.insert_one({
-        "user_id": user_id,
-        "project_id": project_id,
-        "template_name": template_name,
-        "generated_docs": content,
-        "sections": split_into_sections(content),   
-        "version": next_version,
-        "source": source,
-        "team_id": team_id,
-        "created_at": datetime.utcnow()
-    })
+    "user_id": user_id,
+    "project_id": project_id,
+    "template_name": template_name,
+    "generated_docs": content,
+    "version": next_version,
+    "source": source,
+    "team_id": team_id,
+    "is_final": is_final,   
+    "created_at": datetime.utcnow()
+})
 
     print(f"✅ Document saved (v{next_version})")
 
