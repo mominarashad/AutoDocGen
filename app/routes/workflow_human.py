@@ -4,7 +4,7 @@ from app.graph.document_graph import workflow, WorkflowState
 from app.models.user_token_model import get_user_token
 from app.models.slack_model import get_slack_token
 from app.services.slack_service import fetch_channel_messages
-from app.services.doc_storage_service import save_generated_doc  # ✅ USED NOW
+from app.services.doc_storage_service import save_generated_doc  
 import os
 
 router = APIRouter(prefix="/workflow")
@@ -195,7 +195,7 @@ async def resume_workflow(request: Request, payload: dict):
         user_id=user_id,
         project_id=project_id,
         template_name=template,
-        generated_doc=final_doc,
+        content=final_doc,
         source="update",
         team_id=None,
         board_name=project_id
