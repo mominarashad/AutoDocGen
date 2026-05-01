@@ -114,22 +114,49 @@ async def start_workflow(request: Request, payload: dict):
         }
     }
 
-    result = await workflow.ainvoke(state, config=config)
+    final_result = None
 
-    final_doc = result.get("final_doc") or result.get("draft_doc", "")
+    # ======================================================
+    # 🔥 STREAM EXECUTION (CRITICAL FIX)
+    # ======================================================
+    async for event in workflow.astream(state, config=config):
+
+        # ---------------- INTERRUPT ----------------
+        if isinstance(event, dict) and "__interrupt__" in event:
+            interrupt = event["__interrupt__"][0]
+
+            return {
+                "status": "waiting_for_user",
+                "interrupt": interrupt
+            }
+
+        # keep last state
+        if isinstance(event, dict):
+            final_result = event
+
+    # ======================================================
+    # ✅ FINAL RESULT
+    # ======================================================
+    final_doc = (
+        final_result.get("final_doc")
+        or final_result.get("draft_doc", "")
+    )
 
     if isinstance(final_doc, dict):
         final_doc = final_doc.get("content", "")
 
+    # ======================================================
+    # 💾 SAVE ONLY FINAL (NO INTERRUPT CASE)
+    # ======================================================
     await save_generated_doc(
-    db=db,
-    user_id=state["user_id"],
-    project_id=state["project_id"],
-    template_name=state["template"],
-    content=final_doc,   # ✅ FIXED
-    source=state["pm_data"].get("source"),
-    team_id=state["pm_data"].get("team_id"),
-)
+        db=db,
+        user_id=state["user_id"],
+        project_id=state["project_id"],
+        template_name=state["template"],
+        content=final_doc,
+        source=state["pm_data"].get("source"),
+        team_id=state["pm_data"].get("team_id"),
+    )
 
     return {
         "status": "completed",
@@ -137,7 +164,6 @@ async def start_workflow(request: Request, payload: dict):
             "final_doc": final_doc
         }
     }
-
 
 # ======================================================
 # 🧠 INTENT CLASSIFIER
