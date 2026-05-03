@@ -84,7 +84,11 @@ def debug_finalize(state):
 def route_after_review(state):
     feedback = state.get("user_feedback", "")
     new_headings = state.get("new_headings", [])
-    if state.get("finalized"):
+    is_final = state.get("is_final", False)
+
+    # ✅ STOP everything if finalized
+    if is_final:
+        print("🟢 Final flag detected → END")
         return END
 
     if new_headings:
@@ -92,7 +96,6 @@ def route_after_review(state):
         return "doc_draft"
 
     if feedback:
-        # 🔥 SMART SPLIT
         if len(feedback.split()) < 15:
             print("✏️ Short feedback → edit section")
             return "edit_section"
