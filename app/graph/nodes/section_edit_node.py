@@ -92,13 +92,12 @@ def find_best_section(sections, parsed):
 # ==========================================================
 def rebuild_document(original_doc: str, updated_sections: dict):
     output = []
-    current_heading = None
 
+    # preserve original order strictly
     for line in original_doc.split("\n"):
         line_strip = line.strip()
 
         if line_strip in updated_sections:
-            current_heading = line_strip
             output.append(line_strip)
             output.append(updated_sections[line_strip])
         else:
