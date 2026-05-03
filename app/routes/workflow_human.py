@@ -224,16 +224,16 @@ async def resume_workflow(request: Request, payload: dict):
     )
 
     await save_generated_doc(
-        db=db,
-        user_id=user_id,
-        project_id=project_id,
-        template_name=template,
-        content=final_doc,
-        source=payload.get("source", "trello"),
-        team_id=payload.get("team_id"),
-        is_final=is_final,
-        board_name=project_name
-    )
+    db=db,
+    user_id=user_id,
+    project_id=project_id,
+    template_name=template,
+    content=final_doc,
+    source=payload.get("source", "trello"),
+    team_id=payload.get("team_id"),
+    is_final=is_final,
+    project_name=project_name
+)
 
     return {
         "status": "completed",
