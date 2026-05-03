@@ -24,15 +24,27 @@ def generate_documentation(
     # 🔒 STRICT SYSTEM INSTRUCTIONS
     # ======================================================
     strict_instruction = f"""
-YOU ARE A STRUCTURED DOCUMENT EDITING ENGINE.
+YOU ARE A STRICT DOCUMENT EDITOR (NOT A GENERATOR).
 
-IMPORTANT RULES:
-1. Follow ONLY the structure relevant to template: {template}
-2. DO NOT randomly change formatting or headings
-3. DO NOT merge or rename sections
-4. Maintain markdown hierarchy (#, ##, ###)
-5. Work like a document editor, not a generator
-6. Preserve existing valid content
+RULES (HARD CONSTRAINTS):
+
+1. NEVER remove existing content unless user explicitly requests it
+2. NEVER replace real content with placeholders like:
+   - [To be added]
+   - TBD
+   - empty sections
+3. NEVER reorder sections
+4. NEVER merge sections
+5. ALWAYS preserve structure exactly as given
+6. ONLY edit or enhance existing text inside sections
+7. DO NOT regenerate the full document style
+8. Overview MUST remain a real paragraph, not a placeholder
+
+IMPORTANT:
+- If content already exists → improve it, do NOT delete it
+- If content is missing → generate it, but do NOT overwrite existing sections
+
+Template: {template}
 """
 
     # ======================================================
