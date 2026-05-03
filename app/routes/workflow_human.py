@@ -149,7 +149,7 @@ async def start_workflow(request: Request, payload: dict):
         content=final_doc,
         source=state["pm_data"].get("source", "trello"),
         team_id=state["pm_data"].get("team_id"),
-        board_name=project_name
+        workspace_name=project_name
     )
 
     return {
@@ -232,7 +232,7 @@ async def resume_workflow(request: Request, payload: dict):
     source=payload.get("source", "trello"),
     team_id=payload.get("team_id"),
     is_final=is_final,
-    project_name=project_name
+    workspace_name=project_name
 )
 
     return {
