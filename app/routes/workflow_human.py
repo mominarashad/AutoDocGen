@@ -32,10 +32,7 @@ async def build_state(payload: dict, db):
         raise ValueError("Template is required")
 
     pm_data = {}
-    conversation = ""
-    project_name = template or "Project"
 
-    # ---------------- SLACK ----------------
     if source == "slack":
 
         slack_token = await get_slack_token(user_id, team_id, db)
@@ -58,9 +55,6 @@ async def build_state(payload: dict, db):
             "conversation": conversation
         }
 
-        project_name = f"Slack Project {project_id}"
-
-    # ---------------- TRELLO ----------------
     else:
         token = await get_user_token(user_id, db)
 
@@ -71,8 +65,6 @@ async def build_state(payload: dict, db):
             "source": "trello",
             "board_id": project_id
         }
-
-        project_name = f"Trello Project {project_id}"
 
     return WorkflowState(
         project_id=project_id,
@@ -97,12 +89,6 @@ async def start_workflow(request: Request, payload: dict):
 
     db = request.app.state.db
 
-    if not payload.get("template"):
-        return {"status": "error", "message": "Template selection required"}
-
-    if not payload.get("selected_headings"):
-        return {"status": "error", "message": "Please select at least one heading"}
-
     state = await build_state(payload, db)
 
     config = {
@@ -111,47 +97,30 @@ async def start_workflow(request: Request, payload: dict):
         }
     }
 
-    final_result = None
-
     board_name = await get_board_name(
         user_id=state["user_id"],
         project_id=state["project_id"],
         db=db
     )
 
-    # ======================================================
-    # 🔥 STREAM EXECUTION
-    # ======================================================
+    final_result = None
+
     async for event in workflow.astream(state, config=config):
 
         if isinstance(event, dict) and "__interrupt__" in event:
-            interrupt = event["__interrupt__"][0]
-
             return {
                 "status": "waiting_for_user",
-                "interrupt": interrupt
+                "interrupt": event["__interrupt__"][0]
             }
 
-        if isinstance(event, dict):
-            final_result = event
+        final_result = event
 
-    # ======================================================
-    # ✅ FINAL RESULT
-    # ======================================================
-    final_doc = (
-        final_result.get("final_doc")
-        or final_result.get("draft_doc", "")
-    )
+    final_doc = final_result.get("final_doc") or final_result.get("draft_doc", "")
 
     if isinstance(final_doc, dict):
         final_doc = final_doc.get("content", "")
 
-    # ======================================================
-    # 💾 SAVE
-    # ======================================================
-    is_final = False
-    if final_result:
-        is_final = final_result.get("is_final", False)
+    is_final = final_result.get("is_final", False) if final_result else False
 
     await save_generated_doc(
         db=db,
@@ -166,28 +135,27 @@ async def start_workflow(request: Request, payload: dict):
 
     return {
         "status": "completed",
-        "data": {
-            "final_doc": final_doc
-        }
+        "data": {"final_doc": final_doc}
     }
 
 
 # ======================================================
-# 🧠 INTENT CLASSIFIER
+# 🧠 INTENT CLASSIFIER (CLEANED)
 # ======================================================
 def classify_user_intent(feedback: str):
     text = feedback.lower()
 
-    if "add:" in text or "new heading" in text:
+    if "add:" in text:
         return "new_heading"
 
-    if "in section" in text or "update" in text:
+    if "update" in text or "in section" in text:
         return "edit_section"
 
-    if "detail" in text or "improve" in text or "expand" in text:
-        return "refine"   # 🔥 NEW
+    if "improve" in text or "expand" in text or "detail" in text:
+        return "refine"
 
-    return "refine"  # default SHOULD NOT be regenerate
+    # 🔥 IMPORTANT FIX: NEVER regenerate by default
+    return "refine"
 
 
 # ======================================================
@@ -204,10 +172,11 @@ async def resume_workflow(request: Request, payload: dict):
 
     user_input = payload.get("user_input", "")
 
-    # 🟢 FIX 2 — CLEAR FEEDBACK IF FINAL
+    # 🟢 FINAL FIX
     is_final = payload.get("is_final", False)
+
     if is_final:
-        user_input = ""   # 🔥 prevent fake feedback
+        user_input = ""  # prevent fake feedback injection
 
     config = {
         "configurable": {
@@ -217,22 +186,18 @@ async def resume_workflow(request: Request, payload: dict):
 
     intent = classify_user_intent(user_input)
 
-    # 🟢 FIX 3 — PASS is_final INTO WORKFLOW
     result = await workflow.ainvoke(
         Command(resume={
             "user_feedback": user_input,
             "intent": intent,
             "new_headings": payload.get("new_headings", []),
-            "is_final": is_final   # 🔥 ADDED
+            "is_final": is_final
         }),
         config=config
     )
 
     final_doc = result.get("final_doc", "")
 
-    # ======================================================
-    # 💾 SAVE UPDATED VERSION
-    # ======================================================
     await save_generated_doc(
         db=db,
         user_id=user_id,
@@ -246,7 +211,5 @@ async def resume_workflow(request: Request, payload: dict):
 
     return {
         "status": "completed",
-        "data": {
-            "final_doc": final_doc
-        }
+        "data": {"final_doc": final_doc}
     }
