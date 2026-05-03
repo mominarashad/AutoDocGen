@@ -14,7 +14,8 @@ def split_into_sections(doc: str):
     for line in doc.split("\n"):
         line_strip = line.strip()
 
-        if re.match(r"^#+\s*\d+(\.\d+)*", line_strip):
+        # FIXED regex (IMPORTANT)
+        if re.match(r"^#+\s*.*", line_strip):
             if current_heading:
                 sections[current_heading] = "\n".join(buffer).strip()
                 buffer = []
@@ -27,8 +28,6 @@ def split_into_sections(doc: str):
         sections[current_heading] = "\n".join(buffer).strip()
 
     return sections
-
-
 # ==========================================================
 # 🧠 INTENT PARSER (NO HARDCODING)
 # ==========================================================
