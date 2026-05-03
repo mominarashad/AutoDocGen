@@ -3,7 +3,7 @@ from langgraph.types import Command
 from app.graph.document_graph import workflow, WorkflowState
 from app.models.user_token_model import get_user_token
 from app.models.slack_model import get_slack_token
-from app.services.slack_service import fetch_channel_messages,get_channel_name
+from app.services.slack_service import fetch_channel_messages, get_channel_name
 from app.services.doc_storage_service import save_generated_doc
 import os
 from app.services.trello_service import get_board_name
@@ -33,6 +33,9 @@ async def build_state(payload: dict, db):
 
     pm_data = {}
 
+    # ======================================================
+    # SLACK FLOW
+    # ======================================================
     if source == "slack":
 
         slack_token = await get_slack_token(user_id, team_id, db)
@@ -47,15 +50,21 @@ async def build_state(payload: dict, db):
             f"{m.get('user', 'unknown')}: {m.get('text', '')}"
             for m in messages if m.get("text")
         )
+
+        # 🔥 GET CHANNEL NAME
         channel_name = await get_channel_name(slack_token, project_id)
+
         pm_data = {
             "source": "slack",
             "team_id": team_id,
             "channel_id": project_id,
-            "channel_name": channel_name,   
+            "channel_name": channel_name,
             "conversation": conversation
         }
 
+    # ======================================================
+    # TRELLO FLOW
+    # ======================================================
     else:
         token = await get_user_token(user_id, db)
 
@@ -123,6 +132,15 @@ async def start_workflow(request: Request, payload: dict):
 
     is_final = final_result.get("is_final", False) if final_result else False
 
+    # ======================================================
+    # 🔥 UNIFIED PROJECT NAME
+    # ======================================================
+    project_name = (
+        state["pm_data"].get("channel_name")   # Slack
+        or board_name                          # Trello
+        or state["project_id"]                 # fallback
+    )
+
     await save_generated_doc(
         db=db,
         user_id=state["user_id"],
@@ -131,7 +149,7 @@ async def start_workflow(request: Request, payload: dict):
         content=final_doc,
         source=state["pm_data"].get("source"),
         team_id=state["pm_data"].get("team_id"),
-        project_name=board_name
+        board_name=project_name
     )
 
     return {
@@ -141,7 +159,7 @@ async def start_workflow(request: Request, payload: dict):
 
 
 # ======================================================
-# 🧠 INTENT CLASSIFIER (CLEANED)
+# 🧠 INTENT CLASSIFIER
 # ======================================================
 def classify_user_intent(feedback: str):
     text = feedback.lower()
@@ -155,7 +173,6 @@ def classify_user_intent(feedback: str):
     if "improve" in text or "expand" in text or "detail" in text:
         return "refine"
 
-    # 🔥 IMPORTANT FIX: NEVER regenerate by default
     return "refine"
 
 
@@ -172,12 +189,10 @@ async def resume_workflow(request: Request, payload: dict):
     template = payload.get("template")
 
     user_input = payload.get("user_input", "")
-
-    # 🟢 FINAL FIX
     is_final = payload.get("is_final", False)
 
     if is_final:
-        user_input = ""  # prevent fake feedback injection
+        user_input = ""
 
     config = {
         "configurable": {
@@ -199,6 +214,15 @@ async def resume_workflow(request: Request, payload: dict):
 
     final_doc = result.get("final_doc", "")
 
+    # ======================================================
+    # 🔥 UNIFIED PROJECT NAME (RESUME FIX)
+    # ======================================================
+    project_name = (
+        payload.get("channel_name")
+        or payload.get("board_name")
+        or project_id
+    )
+
     await save_generated_doc(
         db=db,
         user_id=user_id,
@@ -208,7 +232,7 @@ async def resume_workflow(request: Request, payload: dict):
         source=payload.get("source", "trello"),
         team_id=payload.get("team_id"),
         is_final=is_final,
-        project_name=board_name
+        board_name=project_name
     )
 
     return {
