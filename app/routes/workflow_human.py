@@ -3,7 +3,7 @@ from langgraph.types import Command
 from app.graph.document_graph import workflow, WorkflowState
 from app.models.user_token_model import get_user_token
 from app.models.slack_model import get_slack_token
-from app.services.slack_service import fetch_channel_messages
+from app.services.slack_service import fetch_channel_messages,get_channel_name
 from app.services.doc_storage_service import save_generated_doc
 import os
 from app.services.trello_service import get_board_name
@@ -47,11 +47,12 @@ async def build_state(payload: dict, db):
             f"{m.get('user', 'unknown')}: {m.get('text', '')}"
             for m in messages if m.get("text")
         )
-
+        channel_name = await get_channel_name(slack_token, project_id)
         pm_data = {
             "source": "slack",
             "team_id": team_id,
             "channel_id": project_id,
+            "channel_name": channel_name,   
             "conversation": conversation
         }
 
