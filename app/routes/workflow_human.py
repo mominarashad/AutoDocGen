@@ -181,10 +181,13 @@ def classify_user_intent(feedback: str):
     if "add:" in text or "new heading" in text:
         return "new_heading"
 
-    if "in section" in text or "in heading" in text or "update" in text:
+    if "in section" in text or "update" in text:
         return "edit_section"
 
-    return "regenerate"
+    if "detail" in text or "improve" in text or "expand" in text:
+        return "refine"   # 🔥 NEW
+
+    return "refine"  # default SHOULD NOT be regenerate
 
 
 # ======================================================
