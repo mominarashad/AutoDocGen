@@ -1,17 +1,18 @@
+import re
+import json
 from langchain_google_genai import ChatGoogleGenerativeAI
 from app.langsmith.load_prompt import load_prompt_from_langsmith
-import re
 
 
 # ==========================================================
-# 🧠 LLM DOCUMENT GENERATION (UPDATED WITH FEEDBACK SUPPORT)
+# 🧠 LLM DOCUMENT GENERATION (FEEDBACK-BASED EDITING FIXED)
 # ==========================================================
 def generate_documentation(
     cleaned_pm_data: str,
     pdf_headings: list,
     selected_headings: list,
     template: str,
-    user_feedback: str = ""   # 🔥 NEW
+    user_feedback: str = ""
 ):
 
     prompt = load_prompt_from_langsmith("doc_prompt_pdf_selected")
@@ -23,41 +24,49 @@ def generate_documentation(
     # 🔒 STRICT SYSTEM INSTRUCTIONS
     # ======================================================
     strict_instruction = f"""
-YOU ARE A STRUCTURED DOCUMENT GENERATION ENGINE.
+YOU ARE A STRUCTURED DOCUMENT EDITING ENGINE.
 
 IMPORTANT RULES:
 1. Follow ONLY the structure relevant to template: {template}
 2. DO NOT randomly change formatting or headings
 3. DO NOT merge or rename sections
-4. ONLY use provided headings when available
-5. If new headings exist, include them exactly as given
-6. Maintain consistent markdown hierarchy (#, ##, ###)
-7. Keep output clean and structured
-
-DO NOT force irrelevant sections (like SRS sections in WBS).
+4. Maintain markdown hierarchy (#, ##, ###)
+5. Work like a document editor, not a generator
+6. Preserve existing valid content
 """
 
     # ======================================================
-    # 🔥 FEEDBACK INJECTION (CORE FIX)
+    # 🔥 FEEDBACK + CONTEXT-AWARE EDITING (CORE FIX)
     # ======================================================
     feedback_block = ""
+
     if user_feedback:
         feedback_block = f"""
+YOU ARE EDITING AN EXISTING DOCUMENT.
 
-USER FEEDBACK (MUST BE APPLIED):
+CURRENT DOCUMENT:
+{cleaned_pm_data}
+
+USER FEEDBACK:
 {user_feedback}
 
-INSTRUCTIONS:
-- Apply the feedback strictly
-- If feedback refers to a specific section (e.g., 1.3), modify ONLY that section
-- If feedback is general, improve the entire document accordingly
-- Do NOT ignore feedback
+INSTRUCTION:
+- DO NOT rewrite entire document
+- ONLY modify relevant sections
+- PRESERVE all correct existing content
+- APPLY user feedback precisely
+
+RULES:
+- "add" → append new content
+- "improve" → expand existing section
+- "make detailed" → elaborate only affected parts
+- "edit section" → modify only that section
 """
 
     # ======================================================
-    # 🧠 FINAL INPUT TO MODEL
+    # 🧠 FINAL INPUT (IMPORTANT FIX)
     # ======================================================
-    final_input = strict_instruction + feedback_block + "\n\nDATA:\n" + cleaned_pm_data
+    final_input = strict_instruction + "\n" + feedback_block
 
     result = chain.invoke({
         "cleaned_pm_data": final_input,
@@ -69,7 +78,7 @@ INSTRUCTIONS:
 
 
 # ==========================================================
-# 🧠 SECTION PARSER (FOR DIFF + EDIT MODE)
+# 🧠 SECTION PARSER (FOR STRUCTURED EDITING)
 # ==========================================================
 def convert_to_sections(text: str):
     """
@@ -101,7 +110,7 @@ def convert_to_sections(text: str):
 
 
 # ==========================================================
-# 🧠 NODE (UPDATED)
+# 🧠 WORKFLOW NODE (UPDATED)
 # ==========================================================
 def create_docs_node(state):
 
@@ -110,7 +119,7 @@ def create_docs_node(state):
     selected_headings = state.get("selected_headings", [])
     template = state.get("template", "")
 
-    # 🔥 NEW: get feedback
+    # 🔥 feedback input from state
     user_feedback = state.get("user_feedback", "")
 
     if not pm_data:
@@ -122,22 +131,22 @@ def create_docs_node(state):
     cleaned_pm_data = str(pm_data)
 
     # ======================================================
-    # 🚀 GENERATE DOCUMENT (WITH FEEDBACK)
+    # 🚀 GENERATE DOCUMENT (EDIT MODE ENABLED)
     # ======================================================
     docs = generate_documentation(
-        cleaned_pm_data,
-        pdf_headings,
-        selected_headings,
+        cleaned_pm_data=cleaned_pm_data,
+        pdf_headings=pdf_headings,
+        selected_headings=selected_headings,
         template=template,
-        user_feedback=user_feedback   # 🔥 PASS FEEDBACK
+        user_feedback=user_feedback
     )
 
     # ======================================================
-    # 🧩 CONVERT TO STRUCTURED SECTIONS
+    # 🧩 STRUCTURE OUTPUT INTO SECTIONS
     # ======================================================
     sections = convert_to_sections(docs)
 
     return {
-        "draft_doc": docs,        # backward compatibility
-        "sections": sections      # 🔥 structured editing support
+        "draft_doc": docs,
+        "sections": sections
     }
