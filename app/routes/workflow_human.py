@@ -1,12 +1,12 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
 from langgraph.types import Command
 from app.graph.document_graph import workflow, WorkflowState
 from app.models.user_token_model import get_user_token
 from app.models.slack_model import get_slack_token
 from app.services.slack_service import fetch_channel_messages, get_channel_name
 from app.services.doc_storage_service import save_generated_doc
-import os
 from app.services.trello_service import get_board_name
+import os
 
 router = APIRouter(prefix="/workflow")
 
@@ -51,7 +51,6 @@ async def build_state(payload: dict, db):
             for m in messages if m.get("text")
         )
 
-        # 🔥 GET CHANNEL NAME
         channel_name = await get_channel_name(slack_token, project_id)
 
         pm_data = {
@@ -107,6 +106,9 @@ async def start_workflow(request: Request, payload: dict):
         }
     }
 
+    # ----------------------------
+    # Get Trello board name
+    # ----------------------------
     board_name = await get_board_name(
         user_id=state["user_id"],
         project_id=state["project_id"],
@@ -130,10 +132,8 @@ async def start_workflow(request: Request, payload: dict):
     if isinstance(final_doc, dict):
         final_doc = final_doc.get("content", "")
 
-    is_final = final_result.get("is_final", False) if final_result else False
-
     # ======================================================
-    # 🔥 UNIFIED PROJECT NAME
+    # 🔥 UNIFIED PROJECT NAME (Slack + Trello)
     # ======================================================
     project_name = (
         state["pm_data"].get("channel_name")   # Slack
@@ -147,7 +147,7 @@ async def start_workflow(request: Request, payload: dict):
         project_id=state["project_id"],
         template_name=state["template"],
         content=final_doc,
-        source=state["pm_data"].get("source"),
+        source=state["pm_data"].get("source", "trello"),
         team_id=state["pm_data"].get("team_id"),
         board_name=project_name
     )
@@ -215,7 +215,7 @@ async def resume_workflow(request: Request, payload: dict):
     final_doc = result.get("final_doc", "")
 
     # ======================================================
-    # 🔥 UNIFIED PROJECT NAME (RESUME FIX)
+    # 🔥 UNIFIED PROJECT NAME (RESUME)
     # ======================================================
     project_name = (
         payload.get("channel_name")
