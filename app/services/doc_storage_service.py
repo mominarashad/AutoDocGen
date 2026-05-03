@@ -9,7 +9,8 @@ async def save_generated_doc(
     content: str,
     source: str = "trello",
     team_id: str = None,
-    is_final: bool = False   
+    is_final: bool = False,
+    project_name: str = None   
 ):
     collection = db["generated_docs"]
 
@@ -41,8 +42,7 @@ async def save_generated_doc(
     "source": source,
     "team_id": team_id,
 
-    # ✅ ADD THIS (IMPORTANT)
-    "board_name": project_id,  # fallback OR pass real name from API
+    "project_name": project_name or project_id,  
 
     "created_at": datetime.utcnow()
 })
