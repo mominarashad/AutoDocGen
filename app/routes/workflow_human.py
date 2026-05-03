@@ -57,7 +57,10 @@ async def build_state(payload: dict, db):
             "source": "slack",
             "team_id": team_id,
             "channel_id": project_id,
-            "channel_name": channel_name,
+
+            # ✅ UNIFIED FIELD (IMPORTANT FIX)
+            "project_name": channel_name,
+
             "conversation": conversation
         }
 
@@ -70,9 +73,14 @@ async def build_state(payload: dict, db):
         if not token:
             raise ValueError("Trello not connected")
 
+        board_name = await get_board_name(user_id, project_id, db)
+
         pm_data = {
             "source": "trello",
-            "board_id": project_id
+            "board_id": project_id,
+
+            # ✅ UNIFIED FIELD
+            "project_name": board_name
         }
 
     return WorkflowState(
@@ -106,10 +114,6 @@ async def start_workflow(request: Request, payload: dict):
         }
     }
 
-    # ----------------------------
-    # Get Trello board name
-    # ----------------------------
-    project_name = state["pm_data"].get("channel_name") or board_name or state["project_id"]
     final_result = None
 
     async for event in workflow.astream(state, config=config):
@@ -128,12 +132,11 @@ async def start_workflow(request: Request, payload: dict):
         final_doc = final_doc.get("content", "")
 
     # ======================================================
-    # 🔥 UNIFIED PROJECT NAME (Slack + Trello)
+    # 🔥 UNIFIED PROJECT NAME (FIXED)
     # ======================================================
     project_name = (
-        state["pm_data"].get("channel_name")   # Slack
-        or board_name                          # Trello
-        or state["project_id"]                 # fallback
+        state["pm_data"].get("project_name")
+        or state["project_id"]
     )
 
     await save_generated_doc(
@@ -210,25 +213,21 @@ async def resume_workflow(request: Request, payload: dict):
     final_doc = result.get("final_doc", "")
 
     # ======================================================
-    # 🔥 UNIFIED PROJECT NAME (RESUME)
+    # 🔥 UNIFIED PROJECT NAME (RESUME FIXED)
     # ======================================================
-    project_name = (
-        payload.get("channel_name")
-        or payload.get("board_name")
-        or project_id
-    )
+    project_name = payload.get("project_name") or project_id
 
     await save_generated_doc(
-    db=db,
-    user_id=user_id,
-    project_id=project_id,
-    template_name=template,
-    content=final_doc,
-    source=payload.get("source", "trello"),
-    team_id=payload.get("team_id"),
-    is_final=is_final,
-    workspace_name=project_name
-)
+        db=db,
+        user_id=user_id,
+        project_id=project_id,
+        template_name=template,
+        content=final_doc,
+        source=payload.get("source", "trello"),
+        team_id=payload.get("team_id"),
+        is_final=is_final,
+        workspace_name=project_name
+    )
 
     return {
         "status": "completed",
