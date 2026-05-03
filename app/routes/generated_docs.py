@@ -24,7 +24,7 @@ async def get_all_generated_docs(request: Request, user_id: str):
             "project_id": doc.get("project_id"),
             "template_name": doc.get("template_name"),
             "generated_docs": doc.get("generated_docs", ""),
-            "board_name": doc.get("board_name", "Unknown Board"),  # <-- add this
+            "project_name": doc.get("project_name") or doc.get("board_name") or "Unknown Project",
             "created_at": str(doc.get("created_at", "")),
             "source": doc.get("source", "trello"),
             "team_id": doc.get("team_id"),
