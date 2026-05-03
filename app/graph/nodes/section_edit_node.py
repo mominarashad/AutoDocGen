@@ -58,10 +58,9 @@ Return ONLY valid JSON.
     except:
         # fallback (still no hardcoding)
         return {
-            "action": "update",
-            "keywords": instruction.split()
-        }
-
+              "action": "refine",   # NOT update
+              "keywords": instruction.split()
+}
 
 # ==========================================================
 # 🎯 SMART SECTION MATCHING (IMPROVED SCORING)
