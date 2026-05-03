@@ -114,17 +114,16 @@ async def start_workflow(request: Request, payload: dict):
     final_result = None
 
     board_name = await get_board_name(
-    user_id=state["user_id"],
-    project_id=state["project_id"],
-    db=db
-)
+        user_id=state["user_id"],
+        project_id=state["project_id"],
+        db=db
+    )
 
     # ======================================================
-    # 🔥 STREAM EXECUTION (CRITICAL FIX)
+    # 🔥 STREAM EXECUTION
     # ======================================================
     async for event in workflow.astream(state, config=config):
 
-        # ---------------- INTERRUPT ----------------
         if isinstance(event, dict) and "__interrupt__" in event:
             interrupt = event["__interrupt__"][0]
 
@@ -148,22 +147,22 @@ async def start_workflow(request: Request, payload: dict):
         final_doc = final_doc.get("content", "")
 
     # ======================================================
-    # 💾 SAVE ONLY FINAL (WITH FINAL FLAG SUPPORT)
+    # 💾 SAVE
     # ======================================================
     is_final = False
     if final_result:
         is_final = final_result.get("is_final", False)
 
     await save_generated_doc(
-       db=db,
-       user_id=state["user_id"],
-       project_id=state["project_id"],
-       template_name=state["template"],
-       content=final_doc,
-       source=state["pm_data"].get("source"),
-       team_id=state["pm_data"].get("team_id"),
-       board_name=board_name   
-)
+        db=db,
+        user_id=state["user_id"],
+        project_id=state["project_id"],
+        template_name=state["template"],
+        content=final_doc,
+        source=state["pm_data"].get("source"),
+        team_id=state["pm_data"].get("team_id"),
+        board_name=board_name
+    )
 
     return {
         "status": "completed",
@@ -202,6 +201,11 @@ async def resume_workflow(request: Request, payload: dict):
 
     user_input = payload.get("user_input", "")
 
+    # 🟢 FIX 2 — CLEAR FEEDBACK IF FINAL
+    is_final = payload.get("is_final", False)
+    if is_final:
+        user_input = ""   # 🔥 prevent fake feedback
+
     config = {
         "configurable": {
             "thread_id": f"{user_id}_{project_id}_{template}"
@@ -210,11 +214,13 @@ async def resume_workflow(request: Request, payload: dict):
 
     intent = classify_user_intent(user_input)
 
+    # 🟢 FIX 3 — PASS is_final INTO WORKFLOW
     result = await workflow.ainvoke(
         Command(resume={
             "user_feedback": user_input,
             "intent": intent,
-            "new_headings": payload.get("new_headings", [])
+            "new_headings": payload.get("new_headings", []),
+            "is_final": is_final   # 🔥 ADDED
         }),
         config=config
     )
@@ -222,12 +228,7 @@ async def resume_workflow(request: Request, payload: dict):
     final_doc = result.get("final_doc", "")
 
     # ======================================================
-    # 🟢 GREEN FLAG SUPPORT (FINAL FLAG)
-    # ======================================================
-    is_final = payload.get("is_final", False)
-
-    # ======================================================
-    # ✅ SAVE UPDATED VERSION (VERSIONING FIXED)
+    # 💾 SAVE UPDATED VERSION
     # ======================================================
     await save_generated_doc(
         db=db,
