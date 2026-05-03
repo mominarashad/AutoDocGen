@@ -109,12 +109,7 @@ async def start_workflow(request: Request, payload: dict):
     # ----------------------------
     # Get Trello board name
     # ----------------------------
-    board_name = await get_board_name(
-        user_id=state["user_id"],
-        project_id=state["project_id"],
-        db=db
-    )
-
+    project_name = state["pm_data"].get("channel_name") or board_name or state["project_id"]
     final_result = None
 
     async for event in workflow.astream(state, config=config):
