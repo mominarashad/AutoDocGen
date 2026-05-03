@@ -135,7 +135,7 @@ graph.add_conditional_edges(
 # =========================
 # EDIT LOOP (FIXED)
 # =========================
-graph.add_edge("edit_section", "doc_draft")
+graph.add_edge("edit_section", "doc_finalize")
 workflow = graph.compile(checkpointer=checkpointer)
 
 print("🔥 GRAPH COMPILED SUCCESSFULLY (HUMAN LOOP + EDIT FLOW ENABLED)")
