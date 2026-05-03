@@ -28,39 +28,6 @@ def split_into_sections(doc: str):
         sections[current_heading] = "\n".join(buffer).strip()
 
     return sections
-# ==========================================================
-# 🧠 INTENT PARSER (NO HARDCODING)
-# ==========================================================
-def parse_user_intent(instruction: str):
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
-
-    prompt = f"""
-Convert this user request into structured JSON.
-
-USER INPUT:
-{instruction}
-
-OUTPUT FORMAT:
-{{
-  "action": "add | update | remove",
-  "target_type": "content | constraint | heading",
-  "keywords": ["word1", "word2"]
-}}
-
-RULE:
-Return ONLY valid JSON.
-"""
-
-    result = llm.invoke(prompt)
-
-    try:
-        return json.loads(result.content if hasattr(result, "content") else str(result))
-    except:
-        # fallback (still no hardcoding)
-        return {
-              "action": "refine",   # NOT update
-              "keywords": instruction.split()
-}
 
 # ==========================================================
 # 🎯 SMART SECTION MATCHING (IMPROVED SCORING)
@@ -121,7 +88,9 @@ def edit_section_node(state):
     # ======================================================
     # 1. INTENT EXTRACTION (NO HARDCODE)
     # ======================================================
-    parsed = parse_user_intent(instruction)
+    parsed = {
+             "keywords": instruction.split()
+             }
 
     # ======================================================
     # 2. SPLIT DOC
