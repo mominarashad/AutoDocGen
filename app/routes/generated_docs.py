@@ -114,7 +114,7 @@ async def get_versions(request: Request, user_id: str, project_id: str, template
     async for doc in cursor:
         versions.append({
             "version": doc["version"],
-            "content": doc["generated_docs"][:300],
+            "content": doc.get("generated_docs", ""),  # ✅ FULL DOCUMENT FIX
             "created_at": doc.get("created_at"),
             "is_latest": doc.get("is_latest", False)
         })
