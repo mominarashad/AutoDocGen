@@ -42,7 +42,7 @@ async def save_generated_doc(
     "source": source,
     "team_id": team_id,
 
-    "workspace_name": workspace_name or project_id,
+    "workspace_name": workspace_name if workspace_name else "Unknown Project",
 
     "created_at": datetime.utcnow()
 })
