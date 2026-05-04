@@ -32,6 +32,7 @@ async def build_state(payload: dict, db):
         raise ValueError("Template is required")
 
     pm_data = {}
+    project_name = None  # ✅ NEW (CRITICAL)
 
     # ======================================================
     # SLACK FLOW
@@ -53,16 +54,15 @@ async def build_state(payload: dict, db):
 
         channel_name = await get_channel_name(slack_token, project_id)
 
+        # ✅ FIX APPLIED
         pm_data = {
             "source": "slack",
             "team_id": team_id,
             "channel_id": project_id,
-
-            # ✅ UNIFIED FIELD (IMPORTANT FIX)
-            "project_name": channel_name,
-
             "conversation": conversation
         }
+
+        project_name = channel_name  # ✅ CRITICAL
 
     # ======================================================
     # TRELLO FLOW
@@ -75,19 +75,25 @@ async def build_state(payload: dict, db):
 
         board_name = await get_board_name(user_id, project_id, db)
 
+        # ✅ FIX APPLIED
         pm_data = {
             "source": "trello",
-            "board_id": project_id,
-
-            # ✅ UNIFIED FIELD
-            "project_name": board_name
+            "board_id": project_id
         }
 
+        project_name = board_name  # ✅ CRITICAL
+
+    # ✅ FIX: RETURN STATE UPDATED
     return WorkflowState(
         project_id=project_id,
         user_id=user_id,
         template=template,
+
+        # ✅ ADDED (MOST IMPORTANT FIX)
+        project_name=project_name,
+
         pm_data=pm_data,
+
         pdf_headings=pdf_headings,
         selected_headings=selected_headings,
         draft_doc="",
@@ -132,12 +138,9 @@ async def start_workflow(request: Request, payload: dict):
         final_doc = final_doc.get("content", "")
 
     # ======================================================
-    # 🔥 UNIFIED PROJECT NAME (FIXED)
+    # ✅ FIX B APPLIED
     # ======================================================
-    project_name = (
-        state["pm_data"].get("project_name")
-        or state["project_id"]
-    )
+    project_name = state.get("project_name") or state["project_id"]
 
     await save_generated_doc(
         db=db,
@@ -147,7 +150,7 @@ async def start_workflow(request: Request, payload: dict):
         content=final_doc,
         source=state["pm_data"].get("source", "trello"),
         team_id=state["pm_data"].get("team_id"),
-        workspace_name=project_name
+        workspace_name=state.get("project_name")  # ✅ FIXED
     )
 
     return {
@@ -213,9 +216,9 @@ async def resume_workflow(request: Request, payload: dict):
     final_doc = result.get("final_doc", "")
 
     # ======================================================
-    # 🔥 UNIFIED PROJECT NAME (RESUME FIXED)
+    # ✅ FIX C APPLIED (CRITICAL)
     # ======================================================
-    project_name = payload.get("project_name") or project_id
+    project_name = result.get("project_name") or project_id
 
     await save_generated_doc(
         db=db,
@@ -226,7 +229,7 @@ async def resume_workflow(request: Request, payload: dict):
         source=payload.get("source", "trello"),
         team_id=payload.get("team_id"),
         is_final=is_final,
-        workspace_name=project_name
+        workspace_name=project_name  # ✅ FIXED
     )
 
     return {
