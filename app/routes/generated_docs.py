@@ -99,34 +99,101 @@ async def get_result(user_id: str, project_id: str, template_name: str, request:
     }
 
 @router.get("/versions")
-async def get_document_versions(
-    request: Request,
-    user_id: str,
-    project_id: str,
-    template_name: str
-):
+async def get_versions(request: Request, user_id: str, project_id: str, template_name: str):
 
     db = request.app.state.db
-    collection = db["generated_docs"]
 
-    cursor = collection.find(
-        {
-            "user_id": user_id,
-            "project_id": project_id,
-            "template_name": template_name
-        }
-    ).sort("version", 1)   # 👈 IMPORTANT: chronological order
+    cursor = db["generated_docs"].find({
+        "user_id": user_id,
+        "project_id": project_id,
+        "template_name": template_name
+    }).sort("version", -1)
 
     versions = []
 
     async for doc in cursor:
         versions.append({
-            "version": doc.get("version", 1),
-            "content": doc.get("generated_docs", ""),
-            "created_at": doc.get("created_at")
+            "version": doc["version"],
+            "content": doc["generated_docs"][:300],
+            "created_at": doc.get("created_at"),
+            "is_latest": doc.get("is_latest", False)
         })
+
+    return {"versions": versions}
+
+@router.get("/latest")
+async def get_latest(request: Request, user_id: str, project_id: str, template_name: str):
+
+    db = request.app.state.db
+
+    doc = await db["generated_docs"].find_one(
+        {
+            "user_id": user_id,
+            "project_id": project_id,
+            "template_name": template_name,
+            "is_latest": True
+        }
+    )
+
+    if not doc:
+        return {"status": "not_found"}
 
     return {
         "status": "success",
-        "versions": versions
+        "version": doc.get("version"),
+        "content": doc.get("generated_docs")
+    }
+
+@router.post("/restore")
+async def restore_version(request: Request, payload: dict):
+
+    db = request.app.state.db
+
+    user_id = payload["user_id"]
+    project_id = payload["project_id"]
+    template_name = payload["template_name"]
+    version = payload["version"]
+
+    collection = db["generated_docs"]
+
+    # 1. find selected version
+    old_doc = await collection.find_one({
+        "user_id": user_id,
+        "project_id": project_id,
+        "template_name": template_name,
+        "version": version
+    })
+
+    if not old_doc:
+        return {"status": "not_found"}
+
+    # 2. unset old latest
+    await collection.update_many(
+        {
+            "user_id": user_id,
+            "project_id": project_id,
+            "template_name": template_name
+        },
+        {"$set": {"is_latest": False}}
+    )
+
+    # 3. create NEW latest version (promotion)
+    new_version = await collection.count_documents({
+        "user_id": user_id,
+        "project_id": project_id,
+        "template_name": template_name
+    }) + 1
+
+    new_doc = {
+        **old_doc,
+        "_id": None,
+        "version": new_version,
+        "is_latest": True
+    }
+
+    await collection.insert_one(new_doc)
+
+    return {
+        "status": "restored",
+        "new_version": new_version
     }
