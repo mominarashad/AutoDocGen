@@ -33,6 +33,7 @@ class WorkflowState(TypedDict, total=False):
 
     draft_doc: str
     final_doc: str
+    project_name: str
 
     user_feedback: str
     review_status: str
