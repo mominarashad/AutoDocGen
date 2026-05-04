@@ -97,3 +97,36 @@ async def get_result(user_id: str, project_id: str, template_name: str, request:
         "status": "success",
         "generated_docs": doc["generated_docs"]
     }
+
+@router.get("/versions")
+async def get_document_versions(
+    request: Request,
+    user_id: str,
+    project_id: str,
+    template_name: str
+):
+
+    db = request.app.state.db
+    collection = db["generated_docs"]
+
+    cursor = collection.find(
+        {
+            "user_id": user_id,
+            "project_id": project_id,
+            "template_name": template_name
+        }
+    ).sort("version", 1)   # 👈 IMPORTANT: chronological order
+
+    versions = []
+
+    async for doc in cursor:
+        versions.append({
+            "version": doc.get("version", 1),
+            "content": doc.get("generated_docs", ""),
+            "created_at": doc.get("created_at")
+        })
+
+    return {
+        "status": "success",
+        "versions": versions
+    }
