@@ -22,9 +22,12 @@ async def get_all_generated_docs(request: Request, user_id: str):
             "id": str(doc.get("_id", "")),
             "project_id": doc.get("project_id"),
             "template_name": doc.get("template_name"),
+
+            # ✅ 🔥 FIXED
+            "version": doc.get("version", 0),
+
             "generated_docs": doc.get("generated_docs", ""),
 
-            
             "project_name": doc.get("workspace_name")
                           or doc.get("project_name")
                           or doc.get("board_name")
