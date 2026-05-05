@@ -58,15 +58,16 @@ def debug_pm_agent(state):
     return result
 
 
-def debug_doc_draft(state):
-    print("\n🔥 [doc_draft] ENTER")
+async def debug_doc_draft(state):
+    final_doc = ""
 
-    result = create_docs_node(state)
+    async for chunk in create_docs_node(state):
+        if isinstance(chunk, dict) and "draft_doc" in chunk:
+            final_doc = chunk["draft_doc"]
 
-    print("🔥 [doc_draft] GENERATED LENGTH:", len(result.get("draft_doc", "")))
-    print("🔥 [doc_draft] EXIT")
+    print("🔥 [doc_draft] GENERATED LENGTH:", len(final_doc))
 
-    return result
+    return {"draft_doc": final_doc}
 
 
 def debug_finalize(state):
