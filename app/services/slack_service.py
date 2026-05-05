@@ -1,5 +1,19 @@
 import httpx
 
+async def get_channel_name(token: str, channel_id: str):
+    async with httpx.AsyncClient() as client:
+        res = await client.get(
+            "https://slack.com/api/conversations.info",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"channel": channel_id}
+        )
+
+        data = res.json()
+
+        if not data.get("ok"):
+            return "Unknown Channel"
+
+        return data["channel"]["name"]
 
 async def join_channel(token: str, channel_id: str):
     async with httpx.AsyncClient() as client:
