@@ -119,53 +119,75 @@ async def start_workflow_stream(request: Request, payload: dict):
         async for event in workflow.astream(
             state,
             config=config,
-            stream_mode="updates"   # ✅ CRITICAL FIX
+            stream_mode=["updates", "custom"]
         ):
 
-            # ================= INTERRUPT (SAFE SERIALIZATION) =================
-            if isinstance(event, dict) and "__interrupt__" in event:
+            # ======================================================
+            # 🧠 CUSTOM TOKEN STREAM (SAFE)
+            # ======================================================
+            if isinstance(event, tuple) and event[0] == "custom":
+                payload = event[1]
 
-                interrupt_data = event["__interrupt__"][0]
-
-                serializable_interrupt = {
-                    "value": getattr(interrupt_data, "value", str(interrupt_data)),
-                    "resumable": getattr(interrupt_data, "resumable", True),
-                    "ns": getattr(interrupt_data, "ns", None),
-                    "when": getattr(interrupt_data, "when", "during"),
-                }
-
-                yield "data: " + json.dumps({
-                    "type": "interrupt",
-                    "data": serializable_interrupt
-                }) + "\n\n"
-                return
+                token = payload.get("token")
+                if token:
+                    yield "data: " + json.dumps({
+                        "type": "token",
+                        "data": token
+                    }) + "\n\n"
+                continue
 
             # ======================================================
-            # NODE-BASED UPDATE HANDLING (🔥 IMPORTANT FIX)
+            # 🧠 UPDATES MODE
             # ======================================================
-            if isinstance(event, dict):
+            if isinstance(event, tuple) and event[0] == "updates":
+                node_events = event[1]
 
-                for node_name, node_output in event.items():
+                # ================= INTERRUPT SAFE =================
+                if isinstance(node_events, dict) and "__interrupt__" in node_events:
+
+                    interrupt_data = node_events["__interrupt__"][0]
+
+                    serializable_interrupt = {
+                        "value": getattr(interrupt_data, "value", str(interrupt_data)),
+                        "resumable": getattr(interrupt_data, "resumable", True),
+                        "ns": getattr(interrupt_data, "ns", None),
+                        "when": getattr(interrupt_data, "when", "during"),
+                    }
+
+                    yield "data: " + json.dumps({
+                        "type": "interrupt",
+                        "data": serializable_interrupt
+                    }) + "\n\n"
+                    return
+
+                # ======================================================
+                # NODE OUTPUT HANDLING
+                # ======================================================
+                for node_name, node_output in node_events.items():
 
                     if not isinstance(node_output, dict):
                         continue
 
-                    # ================= STREAM TOKEN =================
+                    # 🔥 STREAM TOKEN (draft_doc)
                     if node_output.get("draft_doc"):
                         yield "data: " + json.dumps({
                             "type": "token",
                             "data": node_output["draft_doc"]
                         }) + "\n\n"
 
-                    # ================= FINAL DOC CAPTURE =================
+                    # 🔥 FINAL DOC (always latest wins)
                     if node_output.get("final_doc"):
                         final_doc = node_output["final_doc"]
 
-        # ================= NORMALIZE FINAL DOC =================
+        # ======================================================
+        # NORMALIZE FINAL DOC
+        # ======================================================
         if isinstance(final_doc, dict):
             final_doc = final_doc.get("content", "")
 
-        # ================= SAVE =================
+        # ======================================================
+        # SAVE DOC
+        # ======================================================
         await save_generated_doc(
             db=db,
             user_id=state["user_id"],
@@ -177,7 +199,9 @@ async def start_workflow_stream(request: Request, payload: dict):
             workspace_name=project_name
         )
 
-        # ================= FINAL EVENT =================
+        # ======================================================
+        # FINAL EVENT
+        # ======================================================
         yield "data: " + json.dumps({
             "type": "done",
             "data": final_doc
@@ -192,7 +216,6 @@ async def start_workflow_stream(request: Request, payload: dict):
             "X-Accel-Buffering": "no"
         }
     )
-
 
 # ======================================================
 # 🚀 NON-STREAM ENDPOINT (SAFE + CLEAN)
