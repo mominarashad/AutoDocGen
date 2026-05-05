@@ -151,26 +151,25 @@ async def get_latest(request: Request, user_id: str, project_id: str, template_n
 async def restore_version(request: Request, payload: dict):
 
     db = request.app.state.db
+    collection = db["generated_docs"]
 
     user_id = payload["user_id"]
     project_id = payload["project_id"]
     template_name = payload["template_name"]
     version = payload["version"]
 
-    collection = db["generated_docs"]
-
-    # 1. find selected version
-    old_doc = await collection.find_one({
+    # 1. Check if version exists
+    target_doc = await collection.find_one({
         "user_id": user_id,
         "project_id": project_id,
         "template_name": template_name,
         "version": version
     })
 
-    if not old_doc:
+    if not target_doc:
         return {"status": "not_found"}
 
-    # 2. unset old latest
+    # 2. Remove latest flag from ALL versions
     await collection.update_many(
         {
             "user_id": user_id,
@@ -180,23 +179,15 @@ async def restore_version(request: Request, payload: dict):
         {"$set": {"is_latest": False}}
     )
 
-    # 3. create NEW latest version (promotion)
-    new_version = await collection.count_documents({
-        "user_id": user_id,
-        "project_id": project_id,
-        "template_name": template_name
-    }) + 1
-
-    new_doc = {
-        **old_doc,
-        "_id": None,
-        "version": new_version,
-        "is_latest": True
-    }
-
-    await collection.insert_one(new_doc)
+    # 3. Mark selected version as latest
+    await collection.update_one(
+        {
+            "_id": target_doc["_id"]
+        },
+        {"$set": {"is_latest": True}}
+    )
 
     return {
         "status": "restored",
-        "new_version": new_version
+        "restored_version": version
     }
