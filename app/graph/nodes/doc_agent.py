@@ -105,7 +105,7 @@ def convert_to_sections(text: str):
 # 🧠 LANGGRAPH NODE (MAIN)
 # ==========================================================
 async def create_docs_node(state):
-    write = get_stream_writer()  # ← LangGraph's built-in stream writer
+    write = get_stream_writer()
 
     pm_data = state.get("pm_data", {})
     pdf_headings = state.get("pdf_headings", [])
@@ -120,7 +120,38 @@ async def create_docs_node(state):
 
     prompt_template = load_prompt_from_langsmith("doc_gen_prompt")
 
-    # ... build final_input as before ...
+    # ← BUILD final_input HERE (was missing)
+    strict_instruction = """
+YOU ARE A STRICT DOCUMENT EDITOR.
+
+RULES:
+1. NEVER remove existing content
+2. NEVER reorder sections
+3. ONLY edit relevant sections
+4. PRESERVE structure exactly
+5. NO placeholders allowed
+"""
+
+    feedback_block = ""
+    if user_feedback:
+        feedback_block = f"""
+USER REQUEST:
+{user_feedback}
+
+RULES:
+- modify only relevant sections
+- do NOT rewrite full document
+"""
+
+    final_input = f"""
+SYSTEM:
+{strict_instruction}
+
+{feedback_block}
+
+DOCUMENT:
+{cleaned_pm_data}
+"""
 
     prompt = prompt_template.format(
         cleaned_pm_data=final_input,
@@ -137,7 +168,7 @@ async def create_docs_node(state):
         if not token:
             continue
         full_text += token
-        write({"token": token})  # ← streams to frontend via custom stream
+        write({"token": token})
 
     sections = convert_to_sections(full_text)
     return {"draft_doc": full_text, "sections": sections}
