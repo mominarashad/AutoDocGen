@@ -7,6 +7,7 @@ from app.services.slack_service import fetch_channel_messages, get_channel_name
 from app.services.doc_storage_service import save_generated_doc
 from app.services.trello_service import get_board_name
 import os
+import re  # ✅ ADDED
 
 router = APIRouter(prefix="/workflow")
 
@@ -32,15 +33,12 @@ async def build_state(payload: dict, db):
         raise ValueError("Template is required")
 
     pm_data = {}
-    project_name = None  # ✅ NEW (CRITICAL)
+    project_name = None
 
-    # ======================================================
-    # SLACK FLOW
-    # ======================================================
+    # ---------------- SLACK ----------------
     if source == "slack":
 
         slack_token = await get_slack_token(user_id, team_id, db)
-
         if not slack_token:
             raise ValueError("Slack not connected")
 
@@ -54,7 +52,6 @@ async def build_state(payload: dict, db):
 
         channel_name = await get_channel_name(slack_token, project_id)
 
-        # ✅ FIX APPLIED
         pm_data = {
             "source": "slack",
             "team_id": team_id,
@@ -62,38 +59,29 @@ async def build_state(payload: dict, db):
             "conversation": conversation
         }
 
-        project_name = channel_name  # ✅ CRITICAL
+        project_name = channel_name
 
-    # ======================================================
-    # TRELLO FLOW
-    # ======================================================
+    # ---------------- TRELLO ----------------
     else:
         token = await get_user_token(user_id, db)
-
         if not token:
             raise ValueError("Trello not connected")
 
         board_name = await get_board_name(user_id, project_id, db)
 
-        # ✅ FIX APPLIED
         pm_data = {
             "source": "trello",
             "board_id": project_id
         }
 
-        project_name = board_name  # ✅ CRITICAL
+        project_name = board_name
 
-    # ✅ FIX: RETURN STATE UPDATED
     return WorkflowState(
         project_id=project_id,
         user_id=user_id,
         template=template,
-
-        # ✅ ADDED (MOST IMPORTANT FIX)
         project_name=project_name,
-
         pm_data=pm_data,
-
         pdf_headings=pdf_headings,
         selected_headings=selected_headings,
         draft_doc="",
@@ -105,13 +93,51 @@ async def build_state(payload: dict, db):
 
 
 # ======================================================
+# 🔁 MERGE FUNCTION (🔥 CORE FIX)
+# ======================================================
+async def merge_with_previous(db, user_id, project_id, template, new_doc):
+
+    collection = db["generated_docs"]
+
+    latest = await collection.find_one(
+        {
+            "user_id": user_id,
+            "project_id": project_id,
+            "template_name": template
+        },
+        sort=[("version", -1)]
+    )
+
+    if not latest:
+        return new_doc
+
+    existing = latest.get("generated_docs", "")
+
+    existing_heads = set(re.findall(r'##\s*(.+)', existing))
+    new_sections = re.findall(r'(##\s*.+?)(?=\n##|\Z)', new_doc, flags=re.DOTALL)
+
+    additions = []
+
+    for sec in new_sections:
+        match = re.match(r'##\s*(.+)', sec)
+        if match:
+            heading = match.group(1).strip()
+            if heading not in existing_heads:
+                additions.append(sec.strip())
+
+    if additions:
+        return existing.strip() + "\n\n---\n\n" + "\n\n".join(additions)
+
+    return existing
+
+
+# ======================================================
 # 🚀 START WORKFLOW
 # ======================================================
 @router.post("/start")
 async def start_workflow(request: Request, payload: dict):
 
     db = request.app.state.db
-
     state = await build_state(payload, db)
 
     config = {
@@ -123,13 +149,11 @@ async def start_workflow(request: Request, payload: dict):
     final_result = None
 
     async for event in workflow.astream(state, config=config):
-
         if isinstance(event, dict) and "__interrupt__" in event:
             return {
                 "status": "waiting_for_user",
                 "interrupt": event["__interrupt__"][0]
             }
-
         final_result = event
 
     final_doc = final_result.get("final_doc") or final_result.get("draft_doc", "")
@@ -137,25 +161,29 @@ async def start_workflow(request: Request, payload: dict):
     if isinstance(final_doc, dict):
         final_doc = final_doc.get("content", "")
 
-    # ======================================================
-    # ✅ FIX B APPLIED
-    # ======================================================
-    project_name = state.get("project_name") or state["project_id"]
+    # 🔥 MERGE FIX APPLIED
+    merged_doc = await merge_with_previous(
+        db,
+        state["user_id"],
+        state["project_id"],
+        state["template"],
+        final_doc
+    )
 
     await save_generated_doc(
         db=db,
         user_id=state["user_id"],
         project_id=state["project_id"],
         template_name=state["template"],
-        content=final_doc,
+        content=merged_doc,  # ✅ FIXED
         source=state["pm_data"].get("source", "trello"),
         team_id=state["pm_data"].get("team_id"),
-        workspace_name=state.get("project_name")  # ✅ FIXED
+        workspace_name=state.get("project_name")
     )
 
     return {
         "status": "completed",
-        "data": {"final_doc": final_doc}
+        "data": {"final_doc": merged_doc}
     }
 
 
@@ -167,10 +195,8 @@ def classify_user_intent(feedback: str):
 
     if "add:" in text:
         return "new_heading"
-
     if "update" in text or "in section" in text:
         return "edit_section"
-
     if "improve" in text or "expand" in text or "detail" in text:
         return "refine"
 
@@ -215,9 +241,15 @@ async def resume_workflow(request: Request, payload: dict):
 
     final_doc = result.get("final_doc", "")
 
-    # ======================================================
-    # ✅ FIX C APPLIED (CRITICAL)
-    # ======================================================
+    # 🔥 MERGE FIX APPLIED
+    merged_doc = await merge_with_previous(
+        db,
+        user_id,
+        project_id,
+        template,
+        final_doc
+    )
+
     project_name = result.get("project_name") or project_id
 
     await save_generated_doc(
@@ -225,14 +257,14 @@ async def resume_workflow(request: Request, payload: dict):
         user_id=user_id,
         project_id=project_id,
         template_name=template,
-        content=final_doc,
+        content=merged_doc,  # ✅ FIXED
         source=payload.get("source", "trello"),
         team_id=payload.get("team_id"),
         is_final=is_final,
-        workspace_name=project_name  # ✅ FIXED
+        workspace_name=project_name
     )
 
     return {
         "status": "completed",
-        "data": {"final_doc": final_doc}
+        "data": {"final_doc": merged_doc}
     }
