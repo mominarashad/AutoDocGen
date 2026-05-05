@@ -118,11 +118,13 @@ async def create_docs_node(state):
         }
         return
 
-    # ✅ USE EXISTING DOC IF AVAILABLE
+    # ======================================================
+    # USE EXISTING DOC IF AVAILABLE
+    # ======================================================
     cleaned_pm_data = state.get("draft_doc", "") or str(pm_data)
 
     # ======================================================
-    # BUILD PROMPT (KEEP YOUR EXISTING STYLE)
+    # PROMPT BUILDING
     # ======================================================
     prompt_template = load_prompt_from_langsmith("doc_gen_prompt")
 
@@ -174,22 +176,35 @@ DOCUMENT:
     )
 
     full_text = ""
+    sections = {}
 
     # ======================================================
-    # 🔥 STREAM TOKENS TO UI
+    # 🔥 STREAM TOKENS TO UI (REAL-TIME)
     # ======================================================
     async for chunk in llm.astream(prompt):
-    full_text += chunk.content or ""
+        token = chunk.content or ""
 
-    return {
-            "draft_doc": full_text
-             }
+        if not token:
+            continue
+
+        full_text += token
+
+        # 🔥 SEND LIVE STREAM TO FRONTEND
+        yield {
+            "draft_doc": full_text,
+            "__stream__": token
+        }
+
     # ======================================================
-    # FINAL STRUCTURED OUTPUT
+    # FINAL PROCESSING
     # ======================================================
     sections = convert_to_sections(full_text)
 
-    return {
+    # 🔥 FINAL STATE OUTPUT (NO return inside generator)
+    yield {
         "draft_doc": full_text,
-        "sections": sections
+        "sections": sections,
+        "done": True
     }
+
+    return
