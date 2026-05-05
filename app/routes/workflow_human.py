@@ -157,10 +157,10 @@ async def start_workflow_stream(request: Request, payload: dict):
         )
 
         # ================= FINAL EVENT =================
-        yield f"data: {json.dumps({
-            'type': 'done',
-            'data': final_doc
-        })}\n\n"
+        yield "data: " + json.dumps({
+          "type": "interrupt",
+          "data": event["__interrupt__"][0]
+        }) + "\n\n"
 
     return StreamingResponse(
         event_generator(),
