@@ -70,6 +70,8 @@ async def run_slack_workflow(user_id, team_id, channel_id, db):
     }
 
 async def fetch_channels(token: str):
+    print("🔥 SLACK TOKEN (preview):", token[:15])
+
     async with httpx.AsyncClient() as client:
         res = await client.get(
             "https://slack.com/api/conversations.list",
@@ -79,4 +81,10 @@ async def fetch_channels(token: str):
                 "types": "public_channel,private_channel"
             }
         )
-        return res.json()
+
+        data = res.json()
+
+        # 🔥 FULL DEBUG (IMPORTANT)
+        print("🔥 SLACK CHANNELS RESPONSE:", data)
+
+        return data
