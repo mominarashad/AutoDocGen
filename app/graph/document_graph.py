@@ -135,7 +135,7 @@ def route_after_review(state):
 
 # NODES
 graph.add_node("pm_agent", debug_pm_agent)
-graph.add_node("doc_draft", debug_doc_draft)
+graph.add_node("doc_draft", create_docs_node)
 graph.add_node("doc_finalize", debug_finalize)
 graph.add_node("human_review", human_review_node)
 graph.add_node("edit_section", edit_section_node)
