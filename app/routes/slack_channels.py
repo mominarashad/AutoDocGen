@@ -9,7 +9,7 @@ router = APIRouter()
 @router.get("/channels")
 async def get_channels(user_id: str, team_id: str, db=Depends(get_db)):
 
-    token = await get_slack_token(db, user_id, team_id)
+    token = await get_slack_token(user_id, team_id, db)
 
     if not token:
         return {"status": "error", "message": "Slack not connected"}
