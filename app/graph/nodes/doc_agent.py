@@ -116,7 +116,9 @@ async def create_docs_node(state):
     if not pm_data:
         return {"draft_doc": "⚠️ No PM data found", "sections": {}}
 
+    # In create_docs_node, change this line:
     cleaned_pm_data = state.get("draft_doc", "") or str(pm_data)
+    cleaned_pm_data = str(pm_data)
 
     prompt_template = load_prompt_from_langsmith("doc_gen_prompt")
 
