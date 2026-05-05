@@ -97,7 +97,7 @@ async def build_state(payload: dict, db):
 
 
 # ======================================================
-# 🚀 STREAMING ENDPOINT (FIXED SSE VERSION)
+# 🚀 STREAMING ENDPOINT (FIXED + PRODUCTION READY)
 # ======================================================
 @router.post("/start-stream")
 async def start_workflow_stream(request: Request, payload: dict):
@@ -114,24 +114,27 @@ async def start_workflow_stream(request: Request, payload: dict):
     async def event_generator():
 
         final_doc = ""
+        last_interrupt = None
         project_name = state.get("project_name") or state["project_id"]
 
         async for event in workflow.astream(state, config=config):
 
             # ================= INTERRUPT =================
             if isinstance(event, dict) and "__interrupt__" in event:
-                yield f"data: {json.dumps({
-                    'type': 'interrupt',
-                    'data': event['__interrupt__'][0]
-                })}\n\n"
+                last_interrupt = event["__interrupt__"][0]
+
+                yield "data: " + json.dumps({
+                    "type": "interrupt",
+                    "data": last_interrupt
+                }) + "\n\n"
                 return
 
             # ================= TOKEN STREAM =================
             if isinstance(event, dict) and "__stream__" in event:
-                yield f"data: {json.dumps({
-                    'type': 'token',
-                    'data': event['__stream__']
-                })}\n\n"
+                yield "data: " + json.dumps({
+                    "type": "token",
+                    "data": event["__stream__"]
+                }) + "\n\n"
 
             # ================= FINAL DOC CAPTURE =================
             if isinstance(event, dict):
@@ -141,10 +144,11 @@ async def start_workflow_stream(request: Request, payload: dict):
                 if "draft_doc" in event and not final_doc:
                     final_doc = event.get("draft_doc") or ""
 
-        # ================= SAVE AFTER STREAM =================
+        # ================= NORMALIZE FINAL DOC =================
         if isinstance(final_doc, dict):
             final_doc = final_doc.get("content", "")
 
+        # ================= SAVE DOCUMENT =================
         await save_generated_doc(
             db=db,
             user_id=state["user_id"],
@@ -158,8 +162,8 @@ async def start_workflow_stream(request: Request, payload: dict):
 
         # ================= FINAL EVENT =================
         yield "data: " + json.dumps({
-          "type": "interrupt",
-          "data": event["__interrupt__"][0]
+            "type": "done",
+            "data": final_doc
         }) + "\n\n"
 
     return StreamingResponse(
@@ -174,7 +178,7 @@ async def start_workflow_stream(request: Request, payload: dict):
 
 
 # ======================================================
-# 🚀 NON-STREAM START (SAFE FALLBACK)
+# 🚀 NON-STREAM FALLBACK
 # ======================================================
 @router.post("/start")
 async def start_workflow(request: Request, payload: dict):
