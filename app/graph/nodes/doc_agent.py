@@ -15,7 +15,7 @@ def generate_documentation(
     user_feedback: str = ""
 ):
 
-    prompt = load_prompt_from_langsmith("doc_prompt_pdf_selected")
+    prompt = load_prompt_from_langsmith("doc_gen_prompt")
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
     chain = prompt | llm
 
