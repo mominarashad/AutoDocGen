@@ -179,19 +179,11 @@ DOCUMENT:
     # 🔥 STREAM TOKENS TO UI
     # ======================================================
     async for chunk in llm.astream(prompt):
-        token = chunk.content or ""
+    full_text += chunk.content or ""
 
-        if not token:
-            continue
-
-        full_text += token
-
-        # 🔥 THIS ENABLES REAL-TIME STREAMING
-        yield {
-            "draft_doc": full_text,
-            "__stream__": token
-        }
-
+    return {
+            "draft_doc": full_text
+             }
     # ======================================================
     # FINAL STRUCTURED OUTPUT
     # ======================================================
