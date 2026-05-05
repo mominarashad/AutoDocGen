@@ -62,21 +62,20 @@ async def slack_callback(code: str, state: str, db=Depends(get_db)):
         raise HTTPException(status_code=400, detail=data)
 
     team_id = data["team"]["id"]
-    access_token = data["access_token"]
+    access_token = data.get("access_token") or data.get("authed_user", {}).get("access_token")
 
     await db["slack_connections"].update_one(
-        {"user_id": user_id, "team_id": team_id},
-        {
-            "$set": {
-                "user_id": user_id,
-                "team_id": team_id,
-                "access_token": access_token,
-                "created_at": datetime.utcnow()
-            }
-        },
-        upsert=True
-    )
-
+    {"user_id": user_id, "team_id": team_id},
+    {
+        "$set": {
+            "user_id": user_id,
+            "team_id": team_id,
+            "access_token": access_token,
+            "created_at": datetime.utcnow()
+        }
+    },
+    upsert=True
+)
     return RedirectResponse(
         f"{FRONTEND_URL}/slack?team_id={team_id}",
         status_code=302
