@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from langgraph.types import Command
 from app.graph.document_graph import workflow, WorkflowState
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/workflow")
 
 
 # ======================================================
-# 🧠 BUILD STATE (UNCHANGED)
+# 🧠 BUILD STATE
 # ======================================================
 async def build_state(payload: dict, db):
 
@@ -97,7 +97,7 @@ async def build_state(payload: dict, db):
 
 
 # ======================================================
-# 🚀 NEW STREAMING ENDPOINT (FINAL FIX)
+# 🚀 STREAMING ENDPOINT (FIXED SSE VERSION)
 # ======================================================
 @router.post("/start-stream")
 async def start_workflow_stream(request: Request, payload: dict):
@@ -119,23 +119,27 @@ async def start_workflow_stream(request: Request, payload: dict):
         async for event in workflow.astream(state, config=config):
 
             # ================= INTERRUPT =================
-            if "__interrupt__" in event:
-                yield json.dumps({
-                    "type": "interrupt",
-                    "data": event["__interrupt__"][0]
-                }) + "\n"
+            if isinstance(event, dict) and "__interrupt__" in event:
+                yield f"data: {json.dumps({
+                    'type': 'interrupt',
+                    'data': event['__interrupt__'][0]
+                })}\n\n"
                 return
 
-            # ================= STREAM TOKENS =================
-            if "__stream__" in event:
-                yield json.dumps({
-                    "type": "token",
-                    "data": event["__stream__"]
-                }) + "\n"
+            # ================= TOKEN STREAM =================
+            if isinstance(event, dict) and "__stream__" in event:
+                yield f"data: {json.dumps({
+                    'type': 'token',
+                    'data': event['__stream__']
+                })}\n\n"
 
-            # ================= CAPTURE FINAL =================
-            if "final_doc" in event or "draft_doc" in event:
-                final_doc = event.get("final_doc") or event.get("draft_doc", "")
+            # ================= FINAL DOC CAPTURE =================
+            if isinstance(event, dict):
+                if "final_doc" in event:
+                    final_doc = event.get("final_doc") or ""
+
+                if "draft_doc" in event and not final_doc:
+                    final_doc = event.get("draft_doc") or ""
 
         # ================= SAVE AFTER STREAM =================
         if isinstance(final_doc, dict):
@@ -153,16 +157,24 @@ async def start_workflow_stream(request: Request, payload: dict):
         )
 
         # ================= FINAL EVENT =================
-        yield json.dumps({
-            "type": "done",
-            "data": final_doc
-        }) + "\n"
+        yield f"data: {json.dumps({
+            'type': 'done',
+            'data': final_doc
+        })}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="application/json")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 
 # ======================================================
-# 🚀 EXISTING START (UNCHANGED SAFE FALLBACK)
+# 🚀 NON-STREAM START (SAFE FALLBACK)
 # ======================================================
 @router.post("/start")
 async def start_workflow(request: Request, payload: dict):
@@ -179,13 +191,11 @@ async def start_workflow(request: Request, payload: dict):
     final_result = None
 
     async for event in workflow.astream(state, config=config):
-
-        if "__interrupt__" in event:
+        if isinstance(event, dict) and "__interrupt__" in event:
             return {
                 "status": "waiting_for_user",
                 "interrupt": event["__interrupt__"][0]
             }
-
         final_result = event
 
     final_doc = final_result.get("final_doc") or final_result.get("draft_doc", "")
@@ -203,79 +213,6 @@ async def start_workflow(request: Request, payload: dict):
         content=final_doc,
         source=state["pm_data"].get("source", "trello"),
         team_id=state["pm_data"].get("team_id"),
-        workspace_name=project_name
-    )
-
-    return {
-        "status": "completed",
-        "data": {"final_doc": final_doc}
-    }
-
-
-# ======================================================
-# 🧠 INTENT CLASSIFIER (UNCHANGED)
-# ======================================================
-def classify_user_intent(feedback: str):
-    text = feedback.lower()
-
-    if "add:" in text:
-        return "new_heading"
-    if "update" in text or "in section" in text:
-        return "edit_section"
-    if "improve" in text or "expand" in text or "detail" in text:
-        return "refine"
-
-    return "refine"
-
-
-# ======================================================
-# 🔁 RESUME WORKFLOW (UNCHANGED)
-# ======================================================
-@router.post("/resume")
-async def resume_workflow(request: Request, payload: dict):
-
-    db = request.app.state.db
-
-    user_id = payload.get("user_id")
-    project_id = payload.get("project_id")
-    template = payload.get("template")
-
-    user_input = payload.get("user_input", "")
-    is_final = payload.get("is_final", False)
-
-    if is_final:
-        user_input = ""
-
-    config = {
-        "configurable": {
-            "thread_id": f"{user_id}_{project_id}_{template}"
-        }
-    }
-
-    intent = classify_user_intent(user_input)
-
-    result = await workflow.ainvoke(
-        Command(resume={
-            "user_feedback": user_input,
-            "intent": intent,
-            "new_headings": payload.get("new_headings", []),
-            "is_final": is_final
-        }),
-        config=config
-    )
-
-    final_doc = result.get("final_doc", "")
-    project_name = result.get("project_name") or project_id
-
-    await save_generated_doc(
-        db=db,
-        user_id=user_id,
-        project_id=project_id,
-        template_name=template,
-        content=final_doc,
-        source=payload.get("source", "trello"),
-        team_id=payload.get("team_id"),
-        is_final=is_final,
         workspace_name=project_name
     )
 
