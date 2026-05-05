@@ -387,19 +387,21 @@ async def get_generated_doc(
     print(f"🔥 DEBUG: source={source}, team_id={team_id}")
 
     doc = await db["generated_docs"].find_one({
-        "user_id": user_id,
-        "project_id": project_id,
-        "template_name": template_name,
-    })
+    "user_id": user_id,
+    "project_id": project_id,
+    "template_name": template_name,
+    "is_latest": True
+})
 
     if not doc:
-       return {
-          "status": "not_found",
-          "message": "No document found. Start workflow first."
-    }
-
-    print("🔥 DEBUG: Document found, returning")
-
+        doc = await db["generated_docs"].find_one(
+        {
+            "user_id": user_id,
+            "project_id": project_id,
+            "template_name": template_name,
+        },
+             sort=[("version", -1)]
+    )
     return {
         "status": "success",
         "template_name": template_name,
