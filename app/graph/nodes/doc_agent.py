@@ -1,13 +1,12 @@
 import re
-import json
 from langchain_google_genai import ChatGoogleGenerativeAI
 from app.langsmith.load_prompt import load_prompt_from_langsmith
 
 
 # ==========================================================
-# 🧠 LLM DOCUMENT GENERATION (FEEDBACK-BASED EDITING FIXED)
+# 🧠 LLM DOCUMENT GENERATION (STREAMING FIXED)
 # ==========================================================
-def generate_documentation(
+async def generate_documentation(
     cleaned_pm_data: str,
     pdf_headings: list,
     selected_headings: list,
@@ -16,7 +15,13 @@ def generate_documentation(
 ):
 
     prompt = load_prompt_from_langsmith("doc_gen_prompt")
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+
+    # ✅ STREAMING ENABLED
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash",
+        streaming=True
+    )
+
     chain = prompt | llm
 
     strict_instruction = f"""
@@ -43,7 +48,6 @@ RULES:
 - do NOT rewrite full document
 """
 
-    # 🔥 FIXED CONTEXT HANDLING
     final_input = f"""
 SYSTEM RULES:
 {strict_instruction}
@@ -54,24 +58,26 @@ DOCUMENT:
 {cleaned_pm_data}
 """
 
-    result = chain.invoke({
+    # ✅ STREAM CONSUMPTION (REAL FIX)
+    full_output = ""
+
+    async for chunk in chain.astream({
         "cleaned_pm_data": final_input,
         "pdf_headings": pdf_headings,
         "selected_headings": selected_headings
-    })
+    }):
+        if hasattr(chunk, "content") and chunk.content:
+            full_output += chunk.content
 
-    return result.content if hasattr(result, "content") else str(result)
+    return full_output
+
+
 # ==========================================================
-# 🧠 SECTION PARSER (FOR STRUCTURED EDITING)
+# 🧠 SECTION PARSER
 # ==========================================================
 def convert_to_sections(text: str):
-    """
-    Converts markdown document into structured sections
-    for section-wise editing (Notion-style AI)
-    """
 
     pattern = r"(#{1,6}\s.*)"
-
     parts = re.split(pattern, text)
 
     sections = {}
@@ -95,15 +101,14 @@ def convert_to_sections(text: str):
 
 
 # ==========================================================
-# 🧠 WORKFLOW NODE (UPDATED)
+# 🧠 WORKFLOW NODE (UPDATED FOR ASYNC)
 # ==========================================================
-def create_docs_node(state):
+async def create_docs_node(state):
 
     pm_data = state.get("pm_data", {})
     pdf_headings = state.get("pdf_headings", [])
     selected_headings = state.get("selected_headings", [])
     template = state.get("template", "")
-
     user_feedback = state.get("user_feedback", "")
 
     if not pm_data:
@@ -112,10 +117,11 @@ def create_docs_node(state):
             "sections": {}
         }
 
-    # 🔥 FIXED: use actual document if exists
+    # ✅ USE EXISTING DOC IF PRESENT
     cleaned_pm_data = state.get("draft_doc", "") or str(pm_data)
 
-    docs = generate_documentation(
+    # ✅ AWAIT STREAMING FUNCTION
+    docs = await generate_documentation(
         cleaned_pm_data=cleaned_pm_data,
         pdf_headings=pdf_headings,
         selected_headings=selected_headings,
