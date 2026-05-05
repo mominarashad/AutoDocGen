@@ -133,19 +133,19 @@ async def get_latest(request: Request, user_id: str, project_id: str, template_n
         {
             "user_id": user_id,
             "project_id": project_id,
-            "template_name": template_name,
-            "is_latest": True
-        }
+            "template_name": template_name
+        },
+        sort=[("version", -1)]  # ✅ ALWAYS pick latest
     )
 
     if not doc:
         return {"status": "not_found"}
 
     return {
-    "status": "success",
-    "version": doc.get("version"),
-    "generated_docs": doc.get("generated_docs")  # ✅ FIX
-}
+        "status": "success",
+        "version": doc.get("version"),
+        "generated_docs": doc.get("generated_docs")
+    }
 
 @router.post("/restore")
 async def restore_version(request: Request, payload: dict):
