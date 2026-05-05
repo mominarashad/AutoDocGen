@@ -37,11 +37,13 @@ class WorkflowState(TypedDict, total=False):
 
     user_feedback: str
     review_status: str
+    is_final: bool
 
     pdf_headings: List[str]
     selected_headings: List[str]
     new_headings: List[str]
     intent: str
+
 
 # =====================================================
 # GRAPH INIT
@@ -49,8 +51,9 @@ class WorkflowState(TypedDict, total=False):
 graph = StateGraph(WorkflowState)
 
 # =====================================================
-# DEBUG WRAPPERS
+# SAFE DEBUG WRAPPERS
 # =====================================================
+
 def debug_pm_agent(state):
     print("\n🔥 [pm_agent] ENTER")
     result = fetch_pm_data_node(state)
@@ -59,11 +62,24 @@ def debug_pm_agent(state):
 
 
 async def debug_doc_draft(state):
+    """
+    IMPORTANT FIX:
+    create_docs_node is ASYNC GENERATOR → MUST NOT be treated as dict
+    """
     final_doc = ""
 
     async for chunk in create_docs_node(state):
-        if isinstance(chunk, dict) and "draft_doc" in chunk:
-            final_doc = chunk["draft_doc"]
+
+        # SAFE STREAM HANDLING ONLY
+        if isinstance(chunk, dict):
+
+            # streaming token
+            if "draft_doc" in chunk:
+                final_doc = chunk["draft_doc"]
+
+            # optional streaming event (future-proof)
+            elif "__stream__" in chunk:
+                continue
 
     print("🔥 [doc_draft] GENERATED LENGTH:", len(final_doc))
 
@@ -75,20 +91,24 @@ def debug_finalize(state):
 
     result = finalize_doc_node(state)
 
+    # SAFETY FIX: ensure dict access is safe
+    if not isinstance(result, dict):
+        raise ValueError("finalize_doc_node must return dict")
+
     print("🔥 [doc_finalize] FINAL LENGTH:", len(result.get("final_doc", "")))
     print("🔥 [doc_finalize] EXIT")
 
     return result
 
+
 # =====================================================
-# ROUTING LOGIC (🔥 CORE FIX)
+# ROUTING LOGIC (SAFE)
 # =====================================================
 def route_after_review(state):
     feedback = state.get("user_feedback", "")
     new_headings = state.get("new_headings", [])
     is_final = state.get("is_final", False)
 
-    # ✅ STOP everything if finalized
     if is_final:
         print("🟢 Final flag detected → END")
         return END
@@ -107,6 +127,8 @@ def route_after_review(state):
 
     print("✅ No changes → END")
     return END
+
+
 # =====================================================
 # GRAPH BUILD
 # =====================================================
@@ -119,7 +141,7 @@ graph.add_node("human_review", human_review_node)
 graph.add_node("edit_section", edit_section_node)
 
 # =========================
-# MAIN FLOW
+# FLOW
 # =========================
 graph.add_edge(START, "pm_agent")
 graph.add_edge("pm_agent", "doc_draft")
@@ -135,9 +157,13 @@ graph.add_conditional_edges(
 )
 
 # =========================
-# EDIT LOOP (FIXED)
+# EDIT LOOP
 # =========================
 graph.add_edge("edit_section", "doc_finalize")
+
+# =====================================================
+# COMPILE
+# =====================================================
 workflow = graph.compile(checkpointer=checkpointer)
 
-print("🔥 GRAPH COMPILED SUCCESSFULLY (HUMAN LOOP + EDIT FLOW ENABLED)")
+print("🔥 GRAPH COMPILED SUCCESSFULLY (SAFE STREAM + HUMAN LOOP + EDIT FLOW ENABLED)")
