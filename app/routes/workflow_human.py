@@ -97,7 +97,7 @@ async def build_state(payload: dict, db):
 
 
 # ======================================================
-# 🚀 STREAMING ENDPOINT (FIXED + SAFE INTERRUPT)
+# 🚀 STREAMING ENDPOINT (FIXED FOR stream_mode="updates")
 # ======================================================
 @router.post("/start-stream")
 async def start_workflow_stream(request: Request, payload: dict):
@@ -116,9 +116,13 @@ async def start_workflow_stream(request: Request, payload: dict):
         final_doc = ""
         project_name = state.get("project_name") or state["project_id"]
 
-        async for event in workflow.astream(state, config=config):
+        async for event in workflow.astream(
+            state,
+            config=config,
+            stream_mode="updates"   # ✅ CRITICAL FIX
+        ):
 
-            # ================= INTERRUPT (SAFE FIX) =================
+            # ================= INTERRUPT (SAFE SERIALIZATION) =================
             if isinstance(event, dict) and "__interrupt__" in event:
 
                 interrupt_data = event["__interrupt__"][0]
@@ -136,19 +140,28 @@ async def start_workflow_stream(request: Request, payload: dict):
                 }) + "\n\n"
                 return
 
-            # ================= STREAM TOKEN =================
+            # ======================================================
+            # NODE-BASED UPDATE HANDLING (🔥 IMPORTANT FIX)
+            # ======================================================
             if isinstance(event, dict):
 
-                if "draft_doc" in event and event["draft_doc"]:
-                    yield "data: " + json.dumps({
-                        "type": "token",
-                        "data": event["draft_doc"]
-                    }) + "\n\n"
+                for node_name, node_output in event.items():
 
-                if "final_doc" in event:
-                    final_doc = event["final_doc"]
+                    if not isinstance(node_output, dict):
+                        continue
 
-        # ================= NORMALIZE =================
+                    # ================= STREAM TOKEN =================
+                    if node_output.get("draft_doc"):
+                        yield "data: " + json.dumps({
+                            "type": "token",
+                            "data": node_output["draft_doc"]
+                        }) + "\n\n"
+
+                    # ================= FINAL DOC CAPTURE =================
+                    if node_output.get("final_doc"):
+                        final_doc = node_output["final_doc"]
+
+        # ================= NORMALIZE FINAL DOC =================
         if isinstance(final_doc, dict):
             final_doc = final_doc.get("content", "")
 
@@ -182,7 +195,7 @@ async def start_workflow_stream(request: Request, payload: dict):
 
 
 # ======================================================
-# 🚀 NON-STREAM ENDPOINT (FIXED INTERRUPT SAFETY)
+# 🚀 NON-STREAM ENDPOINT (SAFE + CLEAN)
 # ======================================================
 @router.post("/start")
 async def start_workflow(request: Request, payload: dict):
@@ -201,7 +214,7 @@ async def start_workflow(request: Request, payload: dict):
 
     async for event in workflow.astream(state, config=config):
 
-        # ================= INTERRUPT SAFE FIX =================
+        # ================= INTERRUPT SAFE =================
         if isinstance(event, dict) and "__interrupt__" in event:
 
             interrupt_data = event["__interrupt__"][0]
