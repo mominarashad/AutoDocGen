@@ -112,26 +112,92 @@ async def create_docs_node(state):
     user_feedback = state.get("user_feedback", "")
 
     if not pm_data:
-        return {
+        yield {
             "draft_doc": "⚠️ No PM data found",
-            "sections": {}
+            "sections": {},
         }
+        return
 
-    # ✅ USE EXISTING DOC IF PRESENT
+    # ✅ USE EXISTING DOC IF AVAILABLE
     cleaned_pm_data = state.get("draft_doc", "") or str(pm_data)
 
-    # ✅ AWAIT STREAMING FUNCTION
-    docs = await generate_documentation(
-        cleaned_pm_data=cleaned_pm_data,
+    # ======================================================
+    # BUILD PROMPT (KEEP YOUR EXISTING STYLE)
+    # ======================================================
+    prompt_template = load_prompt_from_langsmith("doc_gen_prompt")
+
+    strict_instruction = """
+YOU ARE A STRICT DOCUMENT EDITOR.
+
+RULES:
+1. NEVER remove existing content
+2. NEVER use placeholders like [To be added], TBD
+3. NEVER reorder sections
+4. ONLY edit relevant sections
+5. PRESERVE structure exactly
+6. Overview MUST always contain real content
+"""
+
+    feedback_block = ""
+    if user_feedback:
+        feedback_block = f"""
+USER REQUEST:
+{user_feedback}
+
+RULES:
+- modify only relevant sections
+- do NOT rewrite full document
+"""
+
+    final_input = f"""
+SYSTEM RULES:
+{strict_instruction}
+
+{feedback_block}
+
+DOCUMENT:
+{cleaned_pm_data}
+"""
+
+    prompt = prompt_template.format(
+        cleaned_pm_data=final_input,
         pdf_headings=pdf_headings,
-        selected_headings=selected_headings,
-        template=template,
-        user_feedback=user_feedback
+        selected_headings=selected_headings
     )
 
-    sections = convert_to_sections(docs)
+    # ======================================================
+    # LLM (STREAMING ENABLED)
+    # ======================================================
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash",
+        streaming=True
+    )
+
+    full_text = ""
+
+    # ======================================================
+    # 🔥 STREAM TOKENS TO UI
+    # ======================================================
+    async for chunk in llm.astream(prompt):
+        token = chunk.content or ""
+
+        if not token:
+            continue
+
+        full_text += token
+
+        # 🔥 THIS ENABLES REAL-TIME STREAMING
+        yield {
+            "draft_doc": full_text,
+            "__stream__": token
+        }
+
+    # ======================================================
+    # FINAL STRUCTURED OUTPUT
+    # ======================================================
+    sections = convert_to_sections(full_text)
 
     return {
-        "draft_doc": docs,
+        "draft_doc": full_text,
         "sections": sections
     }
