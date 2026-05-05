@@ -1,6 +1,5 @@
 from datetime import datetime
 
-
 async def save_generated_doc(
     db,
     user_id: str,
@@ -10,7 +9,7 @@ async def save_generated_doc(
     source: str = "trello",
     team_id: str = None,
     is_final: bool = False,
-    workspace_name: str = None   
+    workspace_name: str = None
 ):
     collection = db["generated_docs"]
 
@@ -31,23 +30,36 @@ async def save_generated_doc(
         next_version = last_doc.get("version", 1) + 1
 
     # ======================================================
-    # 💾 SAVE DOCUMENT
+    # ❗ STEP 1: REMOVE OLD "LATEST"
+    # ======================================================
+    await collection.update_many(
+        {
+            "user_id": user_id,
+            "project_id": project_id,
+            "template_name": template_name
+        },
+        {"$set": {"is_latest": False}}
+    )
+
+    # ======================================================
+    # 💾 STEP 2: INSERT NEW DOCUMENT AS LATEST
     # ======================================================
     await collection.insert_one({
-    "user_id": user_id,
-    "project_id": project_id,
-    "template_name": template_name,
-    "generated_docs": content,
-    "version": next_version,
-    "source": source,
-    "team_id": team_id,
+        "user_id": user_id,
+        "project_id": project_id,
+        "template_name": template_name,
+        "generated_docs": content,
+        "version": next_version,
+        "source": source,
+        "team_id": team_id,
+        "workspace_name": workspace_name if workspace_name else "Unknown Project",
+        "created_at": datetime.utcnow(),
 
-    "workspace_name": workspace_name if workspace_name else "Unknown Project",
+        # 🔥🔥🔥 CRITICAL FIELD
+        "is_latest": True
+    })
 
-    "created_at": datetime.utcnow()
-})
-
-    print(f"✅ Document saved (v{next_version})")
+    print(f"✅ Document saved (v{next_version}) as latest")
 
 def split_into_sections(doc: str):
     import re
