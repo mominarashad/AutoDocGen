@@ -14,34 +14,34 @@ async def get_all_generated_docs(request: Request, user_id: str):
     db = request.app.state.db
     collection = db["generated_docs"]
 
-    docs_cursor = collection.find({"user_id": user_id})
+    cursor = collection.find({"user_id": user_id}).sort("version", -1)
 
-    docs = []
-    async for doc in docs_cursor:
-        docs.append({
-            "id": str(doc.get("_id", "")),
-            "project_id": doc.get("project_id"),
-            "template_name": doc.get("template_name"),
+    latest_map = {}
 
-            # ✅ 🔥 FIXED
-            "version": doc.get("version", 0),
+    async for doc in cursor:
+        key = f"{doc['project_id']}_{doc['template_name']}"
 
-            "generated_docs": doc.get("generated_docs", ""),
-
-            "project_name": doc.get("workspace_name")
-                          or doc.get("project_name")
-                          or doc.get("board_name")
-                          or "Unknown Project",
-
-            "created_at": str(doc.get("created_at", "")),
-            "source": doc.get("source", "trello"),
-            "team_id": doc.get("team_id"),
-        })
+        # keep FIRST occurrence (latest because sorted desc)
+        if key not in latest_map:
+            latest_map[key] = {
+                "id": str(doc["_id"]),
+                "project_id": doc["project_id"],
+                "template_name": doc["template_name"],
+                "version": doc.get("version", 0),
+                "generated_docs": doc.get("generated_docs", ""),
+                "project_name": doc.get("workspace_name")
+                    or doc.get("project_name")
+                    or doc.get("board_name")
+                    or "Unknown Project",
+                "created_at": str(doc.get("created_at", "")),
+                "source": doc.get("source", "trello"),
+                "team_id": doc.get("team_id"),
+            }
 
     return {
         "status": "success",
-        "count": len(docs),
-        "documents": docs
+        "count": len(latest_map),
+        "documents": list(latest_map.values())
     }
 # -------------------------------------------------
 # Get documents for a SPECIFIC BOARD (all versions)
