@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Request, HTTPException
+from fastapi.responses import StreamingResponse
 from langgraph.types import Command
 from app.graph.document_graph import workflow, WorkflowState
 from app.models.user_token_model import get_user_token
@@ -7,12 +8,13 @@ from app.services.slack_service import get_channel_name, run_slack_workflow
 from app.services.doc_storage_service import save_generated_doc
 from app.services.trello_service import get_board_name
 import os
+import json
 
 router = APIRouter(prefix="/workflow")
 
 
 # ======================================================
-# 🧠 BUILD STATE
+# 🧠 BUILD STATE (UNCHANGED)
 # ======================================================
 async def build_state(payload: dict, db):
 
@@ -34,17 +36,13 @@ async def build_state(payload: dict, db):
     pm_data = {}
     project_name = None
 
-    # ======================================================
-    # SLACK FLOW (UPDATED FIX)
-    # ======================================================
+    # ================= SLACK =================
     if source == "slack":
 
         slack_token = await get_slack_token(user_id, team_id, db)
-
         if not slack_token:
             raise ValueError("Slack not connected")
 
-        # 🔥 NEW FIXED SLACK WORKFLOW INTEGRATION
         slack_result = await run_slack_workflow(
             user_id=user_id,
             team_id=team_id,
@@ -56,11 +54,8 @@ async def build_state(payload: dict, db):
             raise ValueError("Slack fetch failed")
 
         conversation = slack_result.get("conversation", "")
-        messages = slack_result.get("messages", [])
-
         channel_name = await get_channel_name(slack_token, project_id)
 
-        # ✅ UPDATED pm_data (FIX APPLIED)
         pm_data = {
             "source": "slack",
             "team_id": team_id,
@@ -70,12 +65,9 @@ async def build_state(payload: dict, db):
 
         project_name = channel_name
 
-    # ======================================================
-    # TRELLO FLOW
-    # ======================================================
+    # ================= TRELLO =================
     else:
         token = await get_user_token(user_id, db)
-
         if not token:
             raise ValueError("Trello not connected")
 
@@ -88,18 +80,12 @@ async def build_state(payload: dict, db):
 
         project_name = board_name
 
-    # ======================================================
-    # RETURN STATE
-    # ======================================================
     return WorkflowState(
         project_id=project_id,
         user_id=user_id,
         template=template,
-
         project_name=project_name,
-
         pm_data=pm_data,
-
         pdf_headings=pdf_headings,
         selected_headings=selected_headings,
         draft_doc="",
@@ -111,13 +97,77 @@ async def build_state(payload: dict, db):
 
 
 # ======================================================
-# 🚀 START WORKFLOW
+# 🚀 NEW STREAMING ENDPOINT (FINAL FIX)
+# ======================================================
+@router.post("/start-stream")
+async def start_workflow_stream(request: Request, payload: dict):
+
+    db = request.app.state.db
+    state = await build_state(payload, db)
+
+    config = {
+        "configurable": {
+            "thread_id": f"{state['user_id']}_{state['project_id']}_{state['template']}"
+        }
+    }
+
+    async def event_generator():
+
+        final_doc = ""
+        project_name = state.get("project_name") or state["project_id"]
+
+        async for event in workflow.astream(state, config=config):
+
+            # ================= INTERRUPT =================
+            if "__interrupt__" in event:
+                yield json.dumps({
+                    "type": "interrupt",
+                    "data": event["__interrupt__"][0]
+                }) + "\n"
+                return
+
+            # ================= STREAM TOKENS =================
+            if "__stream__" in event:
+                yield json.dumps({
+                    "type": "token",
+                    "data": event["__stream__"]
+                }) + "\n"
+
+            # ================= CAPTURE FINAL =================
+            if "final_doc" in event or "draft_doc" in event:
+                final_doc = event.get("final_doc") or event.get("draft_doc", "")
+
+        # ================= SAVE AFTER STREAM =================
+        if isinstance(final_doc, dict):
+            final_doc = final_doc.get("content", "")
+
+        await save_generated_doc(
+            db=db,
+            user_id=state["user_id"],
+            project_id=state["project_id"],
+            template_name=state["template"],
+            content=final_doc,
+            source=state["pm_data"].get("source", "trello"),
+            team_id=state["pm_data"].get("team_id"),
+            workspace_name=project_name
+        )
+
+        # ================= FINAL EVENT =================
+        yield json.dumps({
+            "type": "done",
+            "data": final_doc
+        }) + "\n"
+
+    return StreamingResponse(event_generator(), media_type="application/json")
+
+
+# ======================================================
+# 🚀 EXISTING START (UNCHANGED SAFE FALLBACK)
 # ======================================================
 @router.post("/start")
 async def start_workflow(request: Request, payload: dict):
 
     db = request.app.state.db
-
     state = await build_state(payload, db)
 
     config = {
@@ -130,7 +180,7 @@ async def start_workflow(request: Request, payload: dict):
 
     async for event in workflow.astream(state, config=config):
 
-        if isinstance(event, dict) and "__interrupt__" in event:
+        if "__interrupt__" in event:
             return {
                 "status": "waiting_for_user",
                 "interrupt": event["__interrupt__"][0]
@@ -153,7 +203,7 @@ async def start_workflow(request: Request, payload: dict):
         content=final_doc,
         source=state["pm_data"].get("source", "trello"),
         team_id=state["pm_data"].get("team_id"),
-        workspace_name=state.get("project_name")
+        workspace_name=project_name
     )
 
     return {
@@ -163,17 +213,15 @@ async def start_workflow(request: Request, payload: dict):
 
 
 # ======================================================
-# 🧠 INTENT CLASSIFIER
+# 🧠 INTENT CLASSIFIER (UNCHANGED)
 # ======================================================
 def classify_user_intent(feedback: str):
     text = feedback.lower()
 
     if "add:" in text:
         return "new_heading"
-
     if "update" in text or "in section" in text:
         return "edit_section"
-
     if "improve" in text or "expand" in text or "detail" in text:
         return "refine"
 
@@ -181,7 +229,7 @@ def classify_user_intent(feedback: str):
 
 
 # ======================================================
-# 🔁 RESUME WORKFLOW
+# 🔁 RESUME WORKFLOW (UNCHANGED)
 # ======================================================
 @router.post("/resume")
 async def resume_workflow(request: Request, payload: dict):
@@ -217,7 +265,6 @@ async def resume_workflow(request: Request, payload: dict):
     )
 
     final_doc = result.get("final_doc", "")
-
     project_name = result.get("project_name") or project_id
 
     await save_generated_doc(
