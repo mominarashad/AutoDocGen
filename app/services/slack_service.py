@@ -1,4 +1,6 @@
 import httpx
+from app.models.slack_model import get_slack_token
+
 
 async def get_channel_name(token: str, channel_id: str):
     async with httpx.AsyncClient() as client:
@@ -7,13 +9,13 @@ async def get_channel_name(token: str, channel_id: str):
             headers={"Authorization": f"Bearer {token}"},
             params={"channel": channel_id}
         )
-
         data = res.json()
 
         if not data.get("ok"):
             return "Unknown Channel"
 
         return data["channel"]["name"]
+
 
 async def join_channel(token: str, channel_id: str):
     async with httpx.AsyncClient() as client:
@@ -35,6 +37,21 @@ async def fetch_channel_messages(token: str, channel_id: str):
         return res.json()
 
 
+async def fetch_channels(token: str):
+    async with httpx.AsyncClient() as client:
+        res = await client.get(
+            "https://slack.com/api/conversations.list",
+            headers={"Authorization": f"Bearer {token}"},
+            params={
+                "limit": 200,
+                "types": "public_channel,private_channel"
+            }
+        )
+        data = res.json()
+        print("🔥 SLACK RESPONSE:", data)
+        return data
+
+
 async def run_slack_workflow(user_id, team_id, channel_id, db):
 
     token = await get_slack_token(user_id, team_id, db)
@@ -45,7 +62,6 @@ async def run_slack_workflow(user_id, team_id, channel_id, db):
     res = await fetch_channel_messages(token, channel_id)
 
     if res.get("error") == "not_in_channel":
-
         join_res = await join_channel(token, channel_id)
 
         if not join_res.get("ok"):
@@ -68,23 +84,3 @@ async def run_slack_workflow(user_id, team_id, channel_id, db):
         "conversation": conversation,
         "messages": messages
     }
-
-async def fetch_channels(token: str):
-    print("🔥 SLACK TOKEN (preview):", token[:15])
-
-    async with httpx.AsyncClient() as client:
-        res = await client.get(
-            "https://slack.com/api/conversations.list",
-            headers={"Authorization": f"Bearer {token}"},
-            params={
-                "limit": 200,
-                "types": "public_channel,private_channel"
-            }
-        )
-
-        data = res.json()
-
-        # 🔥 FULL DEBUG (IMPORTANT)
-        print("🔥 SLACK CHANNELS RESPONSE:", data)
-
-        return data
