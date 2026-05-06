@@ -127,3 +127,26 @@ DOCUMENT:
 
     sections = convert_to_sections(full_text)
     return {"draft_doc": full_text, "sections": sections}
+
+# After streaming completes, cut at first duplicate heading
+    def cut_at_first_duplicate_heading(text: str) -> str:
+        lines = text.split('\n')
+        seen_headings = set()
+        result = []
+        for line in lines:
+            stripped = line.strip()
+            if re.match(r'^#{1,6}\s+', stripped):
+                normalized = re.sub(r'\s+', ' ', stripped.lower())
+                if normalized in seen_headings:
+                    print(f"🔍 [doc_agent] DUPLICATE HEADING FOUND: {stripped} — cutting here")
+                    break  # stop at first duplicate
+                seen_headings.add(normalized)
+            result.append(line)
+        return '\n'.join(result)
+
+    full_text = cut_at_first_duplicate_heading(full_text)
+
+    print("🔍 [doc_agent] AFTER CUT LENGTH:", len(full_text))
+
+    sections = convert_to_sections(full_text)
+    return {"draft_doc": full_text, "sections": sections}
