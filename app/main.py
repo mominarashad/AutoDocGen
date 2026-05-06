@@ -90,8 +90,6 @@ from app.models.user_token_model import (
     get_user_token,
     save_user_token
 )
-
-from app.services.workflow_service import execute_workflow
 from app.services.slack_service import fetch_channels
 
 # ------------------ MongoDB Startup ------------------
