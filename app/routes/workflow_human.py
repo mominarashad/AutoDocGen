@@ -45,6 +45,7 @@ async def build_state(payload: dict, db):
             channel_id=project_id,
             db=db
         )
+
         if slack_result.get("status") != "success":
             raise ValueError("Slack fetch failed")
 
@@ -57,6 +58,7 @@ async def build_state(payload: dict, db):
             "channel_id": project_id,
             "conversation": conversation
         }
+
         project_name = channel_name
 
     else:
@@ -65,10 +67,12 @@ async def build_state(payload: dict, db):
             raise ValueError("Trello not connected")
 
         board_name = await get_board_name(user_id, project_id, db)
+
         pm_data = {
             "source": "trello",
             "board_id": project_id
         }
+
         project_name = board_name
 
     return WorkflowState(
@@ -88,7 +92,7 @@ async def build_state(payload: dict, db):
 
 
 # ======================================================
-# STREAMING ENDPOINT — workflow_fresh (no checkpoint)
+# STREAMING ENDPOINT
 # ======================================================
 @router.post("/start-stream")
 async def start_workflow_stream(request: Request, payload: dict):
@@ -113,6 +117,7 @@ async def start_workflow_stream(request: Request, payload: dict):
             stream_mode=["updates", "custom"]
         ):
 
+            # ================= TOKEN STREAM =================
             if isinstance(event, tuple) and event[0] == "custom":
                 token = event[1].get("token")
                 if token:
@@ -122,11 +127,14 @@ async def start_workflow_stream(request: Request, payload: dict):
                     }) + "\n\n"
                 continue
 
+            # ================= STATE UPDATES =================
             if isinstance(event, tuple) and event[0] == "updates":
                 node_events = event[1]
 
+                # INTERRUPT
                 if isinstance(node_events, dict) and "__interrupt__" in node_events:
                     interrupt_data = node_events["__interrupt__"][0]
+
                     yield "data: " + json.dumps({
                         "type": "interrupt",
                         "data": {
@@ -138,19 +146,16 @@ async def start_workflow_stream(request: Request, payload: dict):
                     }) + "\n\n"
                     return
 
+                # NORMAL NODE OUTPUT
                 for node_name, node_output in node_events.items():
+
                     if not isinstance(node_output, dict):
                         continue
-                    if isinstance(event, tuple) and event[0] == "custom":
-                        token = event[1].get("token")
-                        if token:
-                            yield "data: " + json.dumps({
-                           "type": "token",
-                           "data": token
-                             }) + "\n\n"
+
                     if node_output.get("final_doc"):
                         final_doc = node_output["final_doc"]
 
+        # ================= SAVE =================
         if isinstance(final_doc, dict):
             final_doc = final_doc.get("content", "")
 
@@ -199,8 +204,10 @@ async def start_workflow(request: Request, payload: dict):
     final_result = None
 
     async for event in workflow.astream(state, config=config):
+
         if isinstance(event, dict) and "__interrupt__" in event:
             interrupt_data = event["__interrupt__"][0]
+
             return {
                 "status": "waiting_for_user",
                 "interrupt": {
@@ -208,9 +215,11 @@ async def start_workflow(request: Request, payload: dict):
                     "resumable": getattr(interrupt_data, "resumable", True),
                 }
             }
+
         final_result = event
 
     final_doc = final_result.get("final_doc") or final_result.get("draft_doc", "")
+
     if isinstance(final_doc, dict):
         final_doc = final_doc.get("content", "")
 
@@ -238,17 +247,19 @@ async def start_workflow(request: Request, payload: dict):
 # ======================================================
 def classify_user_intent(feedback: str):
     text = feedback.lower()
+
     if "add:" in text:
         return "new_heading"
     if "update" in text or "in section" in text:
         return "edit_section"
     if "improve" in text or "expand" in text or "detail" in text:
         return "refine"
+
     return "refine"
 
 
 # ======================================================
-# RESUME WORKFLOW — workflow (with checkpoint)
+# RESUME WORKFLOW
 # ======================================================
 @router.post("/resume")
 async def resume_workflow(request: Request, payload: dict):
