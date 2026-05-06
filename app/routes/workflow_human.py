@@ -92,7 +92,7 @@ async def build_state(payload: dict, db):
 
 
 # ======================================================
-# STREAMING ENDPOINT
+# STREAMING ENDPOINT — no token streaming, just loading → done
 # ======================================================
 @router.post("/start-stream")
 async def start_workflow_stream(request: Request, payload: dict):
@@ -111,49 +111,42 @@ async def start_workflow_stream(request: Request, payload: dict):
         final_doc = ""
         project_name = state.get("project_name") or state["project_id"]
 
+        # ✅ Tell frontend we are working
+        yield "data: " + json.dumps({
+            "type": "loading",
+            "data": "Generating document..."
+        }) + "\n\n"
+
         async for event in workflow_fresh.astream(
             state,
             config=config,
-            stream_mode=["updates", "custom"]
+            stream_mode="updates"  # no custom stream needed
         ):
 
-            # ================= TOKEN STREAM =================
-            if isinstance(event, tuple) and event[0] == "custom":
-                token = event[1].get("token")
-                if token:
-                    yield "data: " + json.dumps({
-                        "type": "token",
-                        "data": token
-                    }) + "\n\n"
+            if not isinstance(event, dict):
                 continue
 
-            # ================= STATE UPDATES =================
-            if isinstance(event, tuple) and event[0] == "updates":
-                node_events = event[1]
+            # ================= INTERRUPT =================
+            if "__interrupt__" in event:
+                interrupt_data = event["__interrupt__"][0]
 
-                # INTERRUPT
-                if isinstance(node_events, dict) and "__interrupt__" in node_events:
-                    interrupt_data = node_events["__interrupt__"][0]
+                yield "data: " + json.dumps({
+                    "type": "interrupt",
+                    "data": {
+                        "value": getattr(interrupt_data, "value", str(interrupt_data)),
+                        "resumable": getattr(interrupt_data, "resumable", True),
+                        "ns": getattr(interrupt_data, "ns", None),
+                        "when": getattr(interrupt_data, "when", "during"),
+                    }
+                }) + "\n\n"
+                return
 
-                    yield "data: " + json.dumps({
-                        "type": "interrupt",
-                        "data": {
-                            "value": getattr(interrupt_data, "value", str(interrupt_data)),
-                            "resumable": getattr(interrupt_data, "resumable", True),
-                            "ns": getattr(interrupt_data, "ns", None),
-                            "when": getattr(interrupt_data, "when", "during"),
-                        }
-                    }) + "\n\n"
-                    return
-
-                # NORMAL NODE OUTPUT
-                for node_name, node_output in node_events.items():
-
-                    if not isinstance(node_output, dict):
-                        continue
-
-                    if node_output.get("final_doc"):
-                        final_doc = node_output["final_doc"]
+            # ================= NODE OUTPUT =================
+            for node_name, node_output in event.items():
+                if not isinstance(node_output, dict):
+                    continue
+                if node_output.get("final_doc"):
+                    final_doc = node_output["final_doc"]
 
         # ================= SAVE =================
         if isinstance(final_doc, dict):
@@ -170,6 +163,7 @@ async def start_workflow_stream(request: Request, payload: dict):
             workspace_name=project_name
         )
 
+        # ✅ Send complete doc once
         yield "data: " + json.dumps({
             "type": "done",
             "data": final_doc
