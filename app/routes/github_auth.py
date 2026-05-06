@@ -1,59 +1,45 @@
-from fastapi import APIRouter, Request
-from fastapi.responses import RedirectResponse
 import os
 import httpx
+from fastapi import APIRouter, Request
+from app.models.github_model import save_github_token
 
-router = APIRouter(prefix="/github")
+router = APIRouter()
 
-GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
-GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
-FRONTEND_URL = os.getenv("FRONTEND_URL")
+CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
+CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
+REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI")
 
-# -------------------------
-# STEP 1: CONNECT
-# -------------------------
-@router.get("/auth/connect")
+
+@router.get("/github/connect")
 async def github_connect(user_id: str):
-    redirect_uri = f"{FRONTEND_URL}/github/callback"
 
     url = (
         "https://github.com/login/oauth/authorize"
-        f"?client_id={GITHUB_CLIENT_ID}"
-        f"&redirect_uri={redirect_uri}"
-        f"&scope=repo"
-        f"&state={user_id}"
+        f"?client_id={CLIENT_ID}"
+        f"&scope=repo read:user"
+        f"&redirect_uri={REDIRECT_URI}?user_id={user_id}"
     )
 
-    return RedirectResponse(url)
+    return {"auth_url": url}
 
 
-# -------------------------
-# STEP 2: CALLBACK
-# -------------------------
-@router.get("/auth/callback")
-async def github_callback(code: str, state: str, request: Request):
-
-    token_url = "https://github.com/login/oauth/access_token"
+@router.get("/github/callback")
+async def github_callback(request: Request, code: str, user_id: str):
 
     async with httpx.AsyncClient() as client:
-        token_res = await client.post(
-            token_url,
+        res = await client.post(
+            "https://github.com/login/oauth/access_token",
             headers={"Accept": "application/json"},
             data={
-                "client_id": GITHUB_CLIENT_ID,
-                "client_secret": GITHUB_CLIENT_SECRET,
+                "client_id": CLIENT_ID,
+                "client_secret": CLIENT_SECRET,
                 "code": code,
-            },
+                "redirect_uri": REDIRECT_URI
+            }
         )
 
-    access_token = token_res.json().get("access_token")
+    token_data = res.json()
 
-    db = request.app.state.db
+    await save_github_token(request.app.state.db, user_id, token_data)
 
-    await db.github_tokens.update_one(
-        {"user_id": state},
-        {"$set": {"access_token": access_token}},
-        upsert=True
-    )
-
-    return RedirectResponse(f"{FRONTEND_URL}/github/repositories")
+    return {"status": "success"}
