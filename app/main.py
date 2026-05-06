@@ -66,6 +66,11 @@ from app.routes.workflow_human import router as workflow_human_router
 from app.routes.slack_auth import router as slack_auth_router
 from app.routes.slack_channels import router as slack_channels_router
 from app.routes.slack_messages import router as slack_messages_router
+# ------------------ GitHub ------------------
+from app.routes.github_auth import router as github_auth_router
+from app.routes.github_repo_router import router as github_repos_router
+
+
 
 print("🔥 DEBUG: Registering routers...")
 
@@ -80,6 +85,8 @@ app.include_router(slack_auth_router, prefix="/slack/auth")
 app.include_router(slack_channels_router, prefix="/api")
 app.include_router(slack_messages_router, prefix="/api")
 app.include_router(workflow_human_router)
+app.include_router(github_auth_router)
+app.include_router(github_repos_router)
 
 # ------------------ Services ------------------
 print("🔥 DEBUG: Loading services...")
