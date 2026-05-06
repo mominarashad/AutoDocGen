@@ -141,11 +141,13 @@ async def start_workflow_stream(request: Request, payload: dict):
                 for node_name, node_output in node_events.items():
                     if not isinstance(node_output, dict):
                         continue
-                    if node_output.get("draft_doc"):
-                        yield "data: " + json.dumps({
-                            "type": "token",
-                            "data": node_output["draft_doc"]
-                        }) + "\n\n"
+                    if isinstance(event, tuple) and event[0] == "custom":
+                        token = event[1].get("token")
+                        if token:
+                            yield "data: " + json.dumps({
+                           "type": "token",
+                           "data": token
+                             }) + "\n\n"
                     if node_output.get("final_doc"):
                         final_doc = node_output["final_doc"]
 
