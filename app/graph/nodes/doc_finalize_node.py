@@ -28,10 +28,15 @@ def remove_duplicate_sections(text: str) -> str:
 
 def finalize_doc_node(state):
     draft = state.get("draft_doc", "")
+
+    print("=" * 60)
+    print("🔍 [finalize] DRAFT INPUT LENGTH:", len(draft))
+    print("🔍 [finalize] DRAFT INPUT PREVIEW:\n", draft[:500])
+    print("=" * 60)
+
     if not draft:
         return {"final_doc": "⚠️ No document generated"}
 
-    # ✅ Step 1: Remove old FINAL headers
     draft = re.sub(
         r"#{1,6}\s*FINAL DOCUMENT[^\n]*\n*",
         "",
@@ -39,14 +44,16 @@ def finalize_doc_node(state):
         flags=re.IGNORECASE
     ).strip()
 
-    # ✅ Step 2: REMOVE DUPLICATE SECTIONS (🔥 HERE)
     draft = remove_duplicate_sections(draft)
 
-    feedback = state.get("user_feedback", "")
+    print("🔍 [finalize] AFTER DEDUP LENGTH:", len(draft))
+    print("🔍 [finalize] AFTER DEDUP PREVIEW:\n", draft[:500])
+    print("=" * 60)
 
+    feedback = state.get("user_feedback", "")
     if feedback:
         final_doc = f"# FINAL DOCUMENT (IMPROVED)\n\n{draft}\n\n---\n\n## Feedback Applied:\n{feedback}"
     else:
         final_doc = f"# FINAL DOCUMENT\n\n{draft}"
 
-    return {"final_doc": final_doc}
+    return {"final_doc": final_doc} 
