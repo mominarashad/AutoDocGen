@@ -174,3 +174,19 @@ DOCUMENT:
 
     sections = convert_to_sections(full_text)
     return {"draft_doc": full_text, "sections": sections}
+
+# After cleaned_pm_data = str(pm_data), add:
+def deduplicate_text(text: str) -> str:
+    # Split into sentences and remove consecutive duplicates
+    import re
+    paragraphs = re.split(r'\n{2,}', text)
+    seen = []
+    result = []
+    for p in paragraphs:
+        normalized = re.sub(r'\s+', ' ', p.strip())
+        if normalized and normalized not in seen:
+            seen.append(normalized)
+            result.append(p.strip())
+    return '\n\n'.join(result)
+
+cleaned_pm_data = deduplicate_text(str(pm_data))
