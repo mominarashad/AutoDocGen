@@ -7,6 +7,7 @@ from app.models.slack_model import get_slack_token
 from app.services.slack_service import get_channel_name, run_slack_workflow
 from app.services.doc_storage_service import save_generated_doc
 from app.services.trello_service import get_board_name
+from app.models.github_model import get_github_repo_collection
 import os
 import json
 import asyncio
@@ -35,6 +36,9 @@ async def build_state(payload: dict, db):
     pm_data = {}
     project_name = None
 
+    # =========================
+    # SLACK SOURCE
+    # =========================
     if source == "slack":
         slack_token = await get_slack_token(user_id, team_id, db)
         if not slack_token:
@@ -62,6 +66,38 @@ async def build_state(payload: dict, db):
 
         project_name = channel_name
 
+    # =========================
+    # GITHUB SOURCE (FIXED)
+    # =========================
+    elif source == "github":
+
+        repo_doc = await db["github_repos"].find_one({"user_id": user_id})
+
+        if not repo_doc:
+            raise ValueError("GitHub repo not selected")
+
+        owner = repo_doc["repo_owner"]
+        repo = repo_doc["repo_name"]
+
+        # fetch stored repo code context
+        github_context = await db["github_context"].find_one({
+            "user_id": user_id,
+            "repo_full_name": f"{owner}/{repo}"
+        })
+
+        pm_data = {
+            "source": "github",
+            "repo_owner": owner,
+            "repo_name": repo,
+            "repo_full": f"{owner}/{repo}",
+            "github_context": github_context["files"] if github_context else []
+        }
+
+        project_name = f"{owner}/{repo}"
+
+    # =========================
+    # TRELLO SOURCE
+    # =========================
     else:
         token = await get_user_token(user_id, db)
         if not token:
