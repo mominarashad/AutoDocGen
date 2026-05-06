@@ -66,11 +66,12 @@ async def create_docs_node(state):
 YOU ARE A STRICT DOCUMENT EDITOR.
 
 RULES:
-1. NEVER remove existing content
-2. NEVER reorder sections
-3. ONLY edit relevant sections
-4. PRESERVE structure exactly
-5. NO placeholders allowed
+
+1. If a section already exists → UPDATE it, DO NOT duplicate it
+2. NEVER create duplicate headings
+3. Each heading must appear ONLY ONCE
+4. Replace content inside sections instead of appending
+5. Keep structure same but overwrite section content when needed
 """
 
     feedback_block = ""
