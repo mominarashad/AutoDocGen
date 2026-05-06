@@ -9,6 +9,8 @@ from app.services.doc_storage_service import save_generated_doc
 from app.services.trello_service import get_board_name
 import os
 import json
+import uuid
+from app.graph.document_graph import checkpointer
 
 router = APIRouter(prefix="/workflow")
 
@@ -97,11 +99,10 @@ async def build_state(payload: dict, db):
 
 
 # ======================================================
-# 🚀 STREAMING ENDPOINT (FIXED FOR stream_mode="updates")
+#  STREAMING ENDPOINT (FIXED FOR stream_mode="updates")
 # ======================================================
 @router.post("/start-stream")
 async def start_workflow_stream(request: Request, payload: dict):
-
     db = request.app.state.db
     state = await build_state(payload, db)
 
@@ -111,6 +112,11 @@ async def start_workflow_stream(request: Request, payload: dict):
         }
     }
 
+    # ← ADD THIS: clear old checkpoint before fresh run
+    try:
+        await checkpointer.adelete_thread(config["configurable"]["thread_id"])
+    except Exception:
+        pass
     async def event_generator():
 
         final_doc = ""
