@@ -5,7 +5,7 @@ from bson import ObjectId
 from pymongo.errors import DuplicateKeyError   # ✅ IMPORTANT
 
 from app.db import get_db
-from app.services.workflow_service import execute_workflow
+
 
 router = APIRouter(tags=["Trello Webhook"])
 
