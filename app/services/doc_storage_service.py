@@ -13,25 +13,7 @@ async def save_generated_doc(
 ):
     collection = db["generated_docs"]
 
-    # ======================================================
-    # 🔢 GET NEXT VERSION
-    # ======================================================
-    last_doc = await collection.find_one(
-        {
-            "user_id": user_id,
-            "project_id": project_id,
-            "template_name": template_name
-        },
-        sort=[("version", -1)]
-    )
-
-    next_version = 1
-    if last_doc:
-        next_version = last_doc.get("version", 1) + 1
-
-    # ======================================================
-    # ❗ STEP 1: REMOVE OLD "LATEST"
-    # ======================================================
+    # Remove all old is_latest flags
     await collection.update_many(
         {
             "user_id": user_id,
@@ -41,9 +23,32 @@ async def save_generated_doc(
         {"$set": {"is_latest": False}}
     )
 
-    # ======================================================
-    # 💾 STEP 2: INSERT NEW DOCUMENT AS LATEST
-    # ======================================================
+    # Get next version
+    last_doc = await collection.find_one(
+        {
+            "user_id": user_id,
+            "project_id": project_id,
+            "template_name": template_name
+        },
+        sort=[("version", -1)]
+    )
+    next_version = (last_doc.get("version", 0) + 1) if last_doc else 1
+
+    # ✅ Deduplicate content before saving
+    import re
+    def deduplicate_content(text: str) -> str:
+        paragraphs = re.split(r'\n{2,}', text)
+        seen = []
+        result = []
+        for p in paragraphs:
+            normalized = re.sub(r'\s+', ' ', p.strip())
+            if normalized and normalized not in seen:
+                seen.append(normalized)
+                result.append(p.strip())
+        return '\n\n'.join(result)
+
+    content = deduplicate_content(content)
+
     await collection.insert_one({
         "user_id": user_id,
         "project_id": project_id,
@@ -52,14 +57,13 @@ async def save_generated_doc(
         "version": next_version,
         "source": source,
         "team_id": team_id,
-        "workspace_name": workspace_name if workspace_name else "Unknown Project",
+        "workspace_name": workspace_name or "Unknown Project",
         "created_at": datetime.utcnow(),
-
-        # 🔥🔥🔥 CRITICAL FIELD
-        "is_latest": True
+        "is_latest": True,
+        "is_final": is_final
     })
 
-    print(f"✅ Document saved (v{next_version}) as latest")
+    print(f"✅ Document saved (v{next_version}) is_latest=True is_final={is_final}")
 
 def split_into_sections(doc: str):
     import re
