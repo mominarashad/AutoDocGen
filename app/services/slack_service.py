@@ -52,35 +52,4 @@ async def fetch_channels(token: str):
         return data
 
 
-async def run_slack_workflow(user_id, team_id, channel_id, db):
 
-    token = await get_slack_token(user_id, team_id, db)
-
-    if not token:
-        return {"status": "error", "message": "No token"}
-
-    res = await fetch_channel_messages(token, channel_id)
-
-    if res.get("error") == "not_in_channel":
-        join_res = await join_channel(token, channel_id)
-
-        if not join_res.get("ok"):
-            return {"status": "error", "message": "join failed"}
-
-        res = await fetch_channel_messages(token, channel_id)
-
-    if not res.get("ok"):
-        return {"status": "error", "message": res.get("error")}
-
-    messages = res.get("messages", [])
-
-    conversation = "\n".join(
-        f"{m.get('user','unknown')}: {m.get('text','')}"
-        for m in messages if m.get("text")
-    )
-
-    return {
-        "status": "success",
-        "conversation": conversation,
-        "messages": messages
-    }
