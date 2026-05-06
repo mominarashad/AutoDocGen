@@ -3,24 +3,13 @@ from app.services.slack_service import fetch_channel_messages, join_channel
 
 
 async def run_slack_workflow(user_id: str, team_id: str, channel_id: str, db):
-    """
-    Clean Slack workflow:
-    - get token
-    - ensure bot in channel
-    - fetch messages
-    - retry once if needed
-    """
 
-    # =========================
-    # TOKEN
-    # =========================
     token = await get_slack_token(user_id, team_id, db)
 
     print("🧪 SLACK WORKFLOW START")
     print("USER:", user_id)
     print("TEAM:", team_id)
     print("CHANNEL:", channel_id)
-    print("TOKEN EXISTS:", bool(token))
 
     if not token:
         return {
@@ -28,21 +17,12 @@ async def run_slack_workflow(user_id: str, team_id: str, channel_id: str, db):
             "message": "Slack token not found"
         }
 
-    # =========================
-    # STEP 1: FETCH MESSAGES
-    # =========================
+    # Step 1: Fetch messages
     res = await fetch_channel_messages(token, channel_id)
-    print("📥 FIRST FETCH RESPONSE:", res)
 
-    # =========================
-    # STEP 2: JOIN IF NEEDED
-    # =========================
+    # Step 2: Join if not in channel
     if res.get("error") == "not_in_channel":
-
-        print("⚠️ Bot not in channel → trying join")
-
         join_res = await join_channel(token, channel_id)
-        print("🤝 JOIN RESPONSE:", join_res)
 
         if not join_res.get("ok"):
             return {
@@ -51,10 +31,9 @@ async def run_slack_workflow(user_id: str, team_id: str, channel_id: str, db):
                 "debug": join_res
             }
 
-        # retry fetch
         res = await fetch_channel_messages(token, channel_id)
-        print("📥 RETRY FETCH RESPONSE:", res)
 
+    # Step 3: Final validation
     if not res.get("ok"):
         return {
             "status": "error",
@@ -63,8 +42,6 @@ async def run_slack_workflow(user_id: str, team_id: str, channel_id: str, db):
         }
 
     messages = res.get("messages", [])
-
-    print("📊 MESSAGE COUNT:", len(messages))
 
     conversation = "\n".join(
         f"{m.get('user', 'unknown')}: {m.get('text', '')}"
