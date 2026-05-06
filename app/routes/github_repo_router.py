@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request
 from app.models.github_model import get_github_token, save_github_repo
 from app.services.github_service import fetch_user_repos, fetch_repo_contents
+from app.services.github_code_service import fetch_repo_tree, fetch_file
 
 router = APIRouter()
 
@@ -63,4 +64,61 @@ async def repo_context(user_id: str, request: Request):
     return {
         "repo": repo,
         "files": contents
+    }
+
+@router.get("/github/repo-code-context")
+async def get_repo_code_context(user_id: str, repo_full_name: str, request: Request):
+
+    db = request.app.state.db
+
+    token_doc = await get_github_token(db, user_id)
+    if not token_doc:
+        return {"error": "GitHub not connected"}
+
+    token = token_doc["access_token"]
+
+    owner, repo = repo_full_name.split("/")
+
+    tree = await fetch_repo_tree(token, owner, repo)
+
+    if "tree" not in tree:
+        return {"error": "Could not fetch repo tree"}
+
+    files = []
+
+    # ⚡ filter important files only
+    allowed_ext = [".py", ".js", ".ts", ".java", ".go", ".md"]
+
+    for item in tree["tree"]:
+
+        if item["type"] != "blob":
+            continue
+
+        if not any(item["path"].endswith(ext) for ext in allowed_ext):
+            continue
+
+        if "node_modules" in item["path"]:
+            continue
+
+        try:
+            content = await fetch_file(token, owner, repo, item["path"])
+
+            # limit huge files
+            content = content[:8000]
+
+            files.append({
+                "path": item["path"],
+                "content": content
+            })
+
+        except:
+            continue
+
+        # limit total files
+        if len(files) >= 20:
+            break
+
+    return {
+        "repo": repo_full_name,
+        "files": files
     }
