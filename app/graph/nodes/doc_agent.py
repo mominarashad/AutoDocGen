@@ -4,17 +4,12 @@ from app.langsmith.load_prompt import load_prompt_from_langsmith
 from langgraph.config import get_stream_writer
 
 
-# ==========================================================
-# 🧠 SECTION PARSER
-# ==========================================================
 def convert_to_sections(text: str):
     pattern = r"(#{1,6}\s.*)"
     parts = re.split(pattern, text)
-
     sections = {}
     current_heading = "intro"
     buffer = ""
-
     for part in parts:
         if not part:
             continue
@@ -25,61 +20,31 @@ def convert_to_sections(text: str):
             buffer = ""
         else:
             buffer += part
-
     if buffer:
         sections[current_heading] = buffer.strip()
-
     return sections
 
 
-# ==========================================================
-# 🧠 LANGGRAPH NODE (MAIN)
-# ==========================================================
 async def create_docs_node(state):
-    write = get_stream_writer()
 
     pm_data = state.get("pm_data", {})
     pdf_headings = state.get("pdf_headings", [])
     selected_headings = state.get("selected_headings", [])
-    template = state.get("template", "")
     user_feedback = state.get("user_feedback", "")
 
     if not pm_data:
         return {"draft_doc": "⚠️ No PM data found", "sections": {}}
-
-    def deduplicate_text(text: str) -> str:
-        paragraphs = re.split(r'\n{2,}', text)
-        seen = []
-        result = []
-        for p in paragraphs:
-            normalized = re.sub(r'\s+', ' ', p.strip())
-            if normalized and normalized not in seen:
-                seen.append(normalized)
-                result.append(p.strip())
-        return '\n\n'.join(result)
-
-    raw_pm = str(pm_data)
-    print("=" * 60)
-    print("🔍 [doc_agent] RAW PM DATA LENGTH:", len(raw_pm))
-    print("🔍 [doc_agent] RAW PM DATA PREVIEW:\n", raw_pm[:500])
-    print("=" * 60)
-
-    cleaned_pm_data = deduplicate_text(raw_pm)
-
-    print("🔍 [doc_agent] CLEANED PM DATA LENGTH:", len(cleaned_pm_data))
-    print("🔍 [doc_agent] CLEANED PM DATA PREVIEW:\n", cleaned_pm_data[:500])
-    print("=" * 60)
 
     prompt_template = load_prompt_from_langsmith("doc_gen_prompt")
 
     strict_instruction = """
 YOU ARE A STRICT DOCUMENT EDITOR.
 RULES:
-1. If a section already exists → UPDATE it, DO NOT duplicate it
-2. NEVER create duplicate headings
-3. Each heading must appear ONLY ONCE
-4. Replace content inside sections instead of appending
-5. Keep structure same but overwrite section content when needed
+1. NEVER create duplicate headings
+2. Each heading must appear ONLY ONCE
+3. Do NOT repeat any section
+4. Keep structure clean and consistent
+5. NO placeholders allowed
 """
 
     feedback_block = ""
@@ -87,6 +52,7 @@ RULES:
         feedback_block = f"""
 USER REQUEST:
 {user_feedback}
+
 RULES:
 - modify only relevant sections
 - do NOT rewrite full document
@@ -95,9 +61,11 @@ RULES:
     final_input = f"""
 SYSTEM:
 {strict_instruction}
+
 {feedback_block}
+
 DOCUMENT:
-{cleaned_pm_data}
+{str(pm_data)}
 """
 
     prompt = prompt_template.format(
@@ -106,47 +74,12 @@ DOCUMENT:
         selected_headings=selected_headings
     )
 
-    print("🔍 [doc_agent] PROMPT LENGTH:", len(prompt))
-    print("🔍 [doc_agent] PROMPT PREVIEW:\n", prompt[:800])
-    print("=" * 60)
+    # ✅ NO STREAMING — single complete response
+    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", streaming=False)
+    result = await llm.ainvoke(prompt)
+    full_text = result.content if hasattr(result, "content") else str(result)
 
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", streaming=True)
-
-    full_text = ""
-
-    async for chunk in llm.astream(prompt):
-        token = getattr(chunk, "content", "") or ""
-        if not token:
-            continue
-        full_text += token
-        write({"token": token})
-
-    print("🔍 [doc_agent] LLM OUTPUT LENGTH:", len(full_text))
-    print("🔍 [doc_agent] LLM OUTPUT PREVIEW:\n", full_text[:500])
-    print("=" * 60)
-
-    sections = convert_to_sections(full_text)
-    return {"draft_doc": full_text, "sections": sections}
-
-# After streaming completes, cut at first duplicate heading
-    def cut_at_first_duplicate_heading(text: str) -> str:
-        lines = text.split('\n')
-        seen_headings = set()
-        result = []
-        for line in lines:
-            stripped = line.strip()
-            if re.match(r'^#{1,6}\s+', stripped):
-                normalized = re.sub(r'\s+', ' ', stripped.lower())
-                if normalized in seen_headings:
-                    print(f"🔍 [doc_agent] DUPLICATE HEADING FOUND: {stripped} — cutting here")
-                    break  # stop at first duplicate
-                seen_headings.add(normalized)
-            result.append(line)
-        return '\n'.join(result)
-
-    full_text = cut_at_first_duplicate_heading(full_text)
-
-    print("🔍 [doc_agent] AFTER CUT LENGTH:", len(full_text))
+    print("🔍 [doc_agent] OUTPUT LENGTH:", len(full_text))
 
     sections = convert_to_sections(full_text)
     return {"draft_doc": full_text, "sections": sections}
