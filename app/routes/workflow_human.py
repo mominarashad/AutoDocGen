@@ -288,20 +288,30 @@ async def resume_workflow(request: Request, payload: dict):
 
     config = {
         "configurable": {
-            "thread_id": f"{user_id}_{project_id}_{template}"
+            "thread_id": (
+                f"{user_id}_{project_id}_{template}"
+            )
         }
     }
 
     result = await workflow.ainvoke(
-        Command(resume={
-            "user_feedback": user_input,
-            "new_headings": payload.get("new_headings", []),
-            "is_final": is_final
-        }),
+        Command(
+            resume={
+                "user_feedback": user_input,
+                "new_headings": payload.get(
+                    "new_headings",
+                    []
+                ),
+                "is_final": is_final
+            }
+        ),
         config=config
     )
 
     final_doc = result.get("final_doc", "")
+
+    # clean duplicate headings
+    final_doc = clean_duplicate_headings(final_doc)
 
     await save_generated_doc(
         db=db,
@@ -317,5 +327,7 @@ async def resume_workflow(request: Request, payload: dict):
 
     return {
         "status": "completed",
-        "data": {"final_doc": final_doc}
+        "data": {
+            "final_doc": final_doc
+        }
     }
