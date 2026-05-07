@@ -11,8 +11,88 @@ from app.models.github_model import get_github_repo_collection
 import os
 import json
 import asyncio
+import re
 
 router = APIRouter(prefix="/workflow")
+
+
+# ======================================================
+# CLEAN INTERRUPT SERIALIZATION
+# ======================================================
+def serialize_interrupt(interrupt_data):
+
+    # LangGraph Interrupt object
+    if hasattr(interrupt_data, "value"):
+        value = interrupt_data.value
+
+        if isinstance(value, dict):
+            return value
+
+        return {"message": str(value)}
+
+    # already dict
+    if isinstance(interrupt_data, dict):
+        return interrupt_data
+
+    # fallback
+    return {"message": str(interrupt_data)}
+
+
+# ======================================================
+# DOCUMENT CLEANUP (DEDUP HEADINGS)
+# ======================================================
+def clean_duplicate_headings(text: str) -> str:
+
+    if not text:
+        return text
+
+    lines = text.splitlines()
+
+    cleaned = []
+    seen = set()
+
+    for line in lines:
+
+        stripped = line.strip()
+
+        # markdown headings
+        heading_match = re.match(r"^(#{1,6})\s+(.+)$", stripped)
+
+        # numbered headings
+        numbered_match = re.match(r"^(\d+(\.\d+)*)\s+(.+)$", stripped)
+
+        heading_text = None
+
+        if heading_match:
+            heading_text = heading_match.group(2).strip().lower()
+
+        elif numbered_match:
+            heading_text = numbered_match.group(3).strip().lower()
+
+        if heading_text:
+
+            normalized = re.sub(r"\s+", " ", heading_text)
+
+            # skip duplicate heading anywhere in doc
+            if normalized in seen:
+                continue
+
+            seen.add(normalized)
+
+        cleaned.append(line)
+
+    # remove accidental repeated consecutive paragraphs
+    final_lines = []
+    prev = None
+
+    for line in cleaned:
+        if line.strip() and line.strip() == prev:
+            continue
+
+        final_lines.append(line)
+        prev = line.strip()
+
+    return "\n".join(final_lines)
 
 
 # ======================================================
@@ -30,6 +110,7 @@ async def build_state(payload: dict, db):
 
     if not user_id or not project_id:
         raise ValueError("Missing user_id or project_id")
+
     if not template:
         raise ValueError("Template is required")
 
@@ -40,7 +121,9 @@ async def build_state(payload: dict, db):
     # SLACK SOURCE
     # =========================
     if source == "slack":
+
         slack_token = await get_slack_token(user_id, team_id, db)
+
         if not slack_token:
             raise ValueError("Slack not connected")
 
@@ -67,11 +150,13 @@ async def build_state(payload: dict, db):
         project_name = channel_name
 
     # =========================
-    # GITHUB SOURCE (FIXED)
+    # GITHUB SOURCE
     # =========================
     elif source == "github":
 
-        repo_doc = await db["github_repos"].find_one({"user_id": user_id})
+        repo_doc = await db["github_repos"].find_one({
+            "user_id": user_id
+        })
 
         if not repo_doc:
             raise ValueError("GitHub repo not selected")
@@ -79,7 +164,6 @@ async def build_state(payload: dict, db):
         owner = repo_doc["repo_owner"]
         repo = repo_doc["repo_name"]
 
-        # fetch stored repo code context
         github_context = await db["github_context"].find_one({
             "user_id": user_id,
             "repo_full_name": f"{owner}/{repo}"
@@ -99,11 +183,17 @@ async def build_state(payload: dict, db):
     # TRELLO SOURCE
     # =========================
     else:
+
         token = await get_user_token(user_id, db)
+
         if not token:
             raise ValueError("Trello not connected")
 
-        board_name = await get_board_name(user_id, project_id, db)
+        board_name = await get_board_name(
+            user_id,
+            project_id,
+            db
+        )
 
         pm_data = {
             "source": "trello",
@@ -129,17 +219,22 @@ async def build_state(payload: dict, db):
 
 
 # ======================================================
-# STREAMING ENDPOINT (FIXED PROPER STREAMING)
+# STREAMING ENDPOINT
 # ======================================================
 @router.post("/start-stream")
 async def start_workflow_stream(request: Request, payload: dict):
 
     db = request.app.state.db
+
     state = await build_state(payload, db)
 
     config = {
         "configurable": {
-            "thread_id": f"{state['user_id']}_{state['project_id']}_{state['template']}"
+            "thread_id": (
+                f"{state['user_id']}_"
+                f"{state['project_id']}_"
+                f"{state['template']}"
+            )
         }
     }
 
@@ -161,28 +256,51 @@ async def start_workflow_stream(request: Request, payload: dict):
             if not isinstance(event, dict):
                 continue
 
-            # interrupt handling
+            # ==================================================
+            # FIXED INTERRUPT SERIALIZATION
+            # ==================================================
             if "__interrupt__" in event:
+
                 interrupt_data = event["__interrupt__"][0]
+
+                parsed_interrupt = serialize_interrupt(
+                    interrupt_data
+                )
 
                 yield "data: " + json.dumps({
                     "type": "interrupt",
-                    "data": str(interrupt_data)
+                    "data": parsed_interrupt
                 }) + "\n\n"
+
                 return
 
             for node_output in event.values():
-                if isinstance(node_output, dict) and node_output.get("final_doc"):
+
+                if (
+                    isinstance(node_output, dict)
+                    and node_output.get("final_doc")
+                ):
                     final_doc = node_output["final_doc"]
 
-        # ================= FIX: STREAM FINAL DOC AS TOKENS =================
+        # ==================================================
+        # CLEAN DUPLICATE HEADINGS
+        # ==================================================
+        final_doc = clean_duplicate_headings(final_doc)
+
+        # ==================================================
+        # FALLBACK
+        # ==================================================
         if not final_doc:
             final_doc = "⚠️ No document generated"
 
-        # chunk streaming (REAL FIX)
+        # ==================================================
+        # STREAM TOKENS
+        # ==================================================
         chunk_size = 20
+
         for i in range(0, len(final_doc), chunk_size):
-            chunk = final_doc[i:i+chunk_size]
+
+            chunk = final_doc[i:i + chunk_size]
 
             yield "data: " + json.dumps({
                 "type": "token",
@@ -191,7 +309,9 @@ async def start_workflow_stream(request: Request, payload: dict):
 
             await asyncio.sleep(0.01)
 
-        # save
+        # ==================================================
+        # SAVE DOC
+        # ==================================================
         await save_generated_doc(
             db=db,
             user_id=state["user_id"],
@@ -220,32 +340,47 @@ async def start_workflow_stream(request: Request, payload: dict):
 
 
 # ======================================================
-# NON-STREAM ENDPOINT (UNCHANGED)
+# NON-STREAM ENDPOINT
 # ======================================================
 @router.post("/start")
 async def start_workflow(request: Request, payload: dict):
+
     db = request.app.state.db
+
     state = await build_state(payload, db)
 
     config = {
         "configurable": {
-            "thread_id": f"{state['user_id']}_{state['project_id']}_{state['template']}"
+            "thread_id": (
+                f"{state['user_id']}_"
+                f"{state['project_id']}_"
+                f"{state['template']}"
+            )
         }
     }
 
     final_result = None
 
-    async for event in workflow.astream(state, config=config):
+    async for event in workflow.astream(
+        state,
+        config=config
+    ):
 
         if isinstance(event, dict) and "__interrupt__" in event:
+
+            interrupt_data = event["__interrupt__"][0]
+
             return {
                 "status": "waiting_for_user",
-                "interrupt": event["__interrupt__"][0]
+                "interrupt": serialize_interrupt(interrupt_data)
             }
 
         final_result = event
 
     final_doc = final_result.get("final_doc", "")
+
+    # clean duplicates here too
+    final_doc = clean_duplicate_headings(final_doc)
 
     await save_generated_doc(
         db=db,
@@ -260,12 +395,14 @@ async def start_workflow(request: Request, payload: dict):
 
     return {
         "status": "completed",
-        "data": {"final_doc": final_doc}
+        "data": {
+            "final_doc": final_doc
+        }
     }
 
 
 # ======================================================
-# RESUME (UNCHANGED)
+# RESUME
 # ======================================================
 @router.post("/resume")
 async def resume_workflow(request: Request, payload: dict):
@@ -283,20 +420,30 @@ async def resume_workflow(request: Request, payload: dict):
 
     config = {
         "configurable": {
-            "thread_id": f"{user_id}_{project_id}_{template}"
+            "thread_id": (
+                f"{user_id}_{project_id}_{template}"
+            )
         }
     }
 
     result = await workflow.ainvoke(
-        Command(resume={
-            "user_feedback": user_input,
-            "new_headings": payload.get("new_headings", []),
-            "is_final": is_final
-        }),
+        Command(
+            resume={
+                "user_feedback": user_input,
+                "new_headings": payload.get(
+                    "new_headings",
+                    []
+                ),
+                "is_final": is_final
+            }
+        ),
         config=config
     )
 
     final_doc = result.get("final_doc", "")
+
+    # clean duplicate headings
+    final_doc = clean_duplicate_headings(final_doc)
 
     await save_generated_doc(
         db=db,
@@ -312,5 +459,7 @@ async def resume_workflow(request: Request, payload: dict):
 
     return {
         "status": "completed",
-        "data": {"final_doc": final_doc}
+        "data": {
+            "final_doc": final_doc
+        }
     }
