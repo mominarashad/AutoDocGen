@@ -71,11 +71,7 @@ def fetch_pm_data_node(state: dict) -> dict:
     trello_key = state.get("user_trello_key") or os.getenv("TRELLO_API_KEY")
     trello_token = state.get("user_trello_token") or os.getenv("TRELLO_TOKEN")
 
-    project_id = (
-    state.get("project_id")
-    or state.get("board_id")
-    or state.get("pm_data", {}).get("board_id")
-     )
+    project_id = state.get("project_id") or state.get("pm_data", {}).get("board_id")
 
     project_name = state.get("project_name")
 
@@ -97,7 +93,7 @@ def fetch_pm_data_node(state: dict) -> dict:
     # --------------------------------------------------
     # Fetch Trello cards (SYNC)
     # --------------------------------------------------
-    url = f"https://api.trello.com/1/boards/{board_id}/cards"
+    url = f"https://api.trello.com/1/boards/{project_id}/cards"
     params = {
         "key": trello_key,
         "token": trello_token,
@@ -112,7 +108,7 @@ def fetch_pm_data_node(state: dict) -> dict:
 
     state["pm_data"] = {
         "source": "trello",
-        "board_id": board_id,
+        "board_id": project_id,
         "cards": res.json()
     }
 
