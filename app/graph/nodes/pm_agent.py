@@ -71,7 +71,12 @@ def fetch_pm_data_node(state: dict) -> dict:
     trello_key = state.get("user_trello_key") or os.getenv("TRELLO_API_KEY")
     trello_token = state.get("user_trello_token") or os.getenv("TRELLO_TOKEN")
 
-    project_id = state.get("project_id") or state.get("board_id")
+    project_id = (
+    state.get("project_id")
+    or state.get("board_id")
+    or state.get("pm_data", {}).get("board_id")
+     )
+
     project_name = state.get("project_name")
 
     if not trello_key:
@@ -81,19 +86,13 @@ def fetch_pm_data_node(state: dict) -> dict:
         raise ValueError("Trello token missing in workflow state")
 
     if not project_id and not project_name:
-        raise ValueError("Both project_id and project_name are missing")
+           project_id = state.get("pm_data", {}).get("channel_id") \
+              or state.get("pm_data", {}).get("board_id")
 
-    # --------------------------------------------------
-    # Resolve board ID
-    # --------------------------------------------------
-    if project_id and len(project_id) == 24:
-        board_id = project_id
-    else:
-        board_id = get_board_id_from_name(
-            trello_key,
-            trello_token,
-            project_name
-        )
+    if not project_id and not project_name:
+             raise ValueError(
+             "Both project_id and project_name are missing even after recovery"
+            )
 
     # --------------------------------------------------
     # Fetch Trello cards (SYNC)
