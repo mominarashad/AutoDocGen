@@ -79,7 +79,7 @@ async def fetch_user_boards_from_trello(user_id: str, db):
 
     return [
         {
-            "board_id": b["id"],
+            "project_id": b["id"],
             "board_name": b["name"],
             "board_url": b["url"]
         }
@@ -99,7 +99,6 @@ async def get_user_generated_boards(user_id: str, db):
         {
             "_id": 0,
             "project_id": 1,
-            "board_id": 1,
             "board_name": 1,
             "template_name": 1
         }
@@ -136,8 +135,8 @@ async def get_board_name(user_id: str, project_id: str, db=None) -> str:
     if not token:
         print("❌ Trello token missing for user:", user_id)
         return "Untitled Project"
-
-    url = f"https://api.trello.com/1/boards/{project_id}"
+    board_id = project_id
+    url = f"https://api.trello.com/1/boards/{board_id}"
     params = {"key": TRELLO_API_KEY, "token": token, "fields": "name"}
 
     try:
