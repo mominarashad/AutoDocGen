@@ -39,7 +39,14 @@ def get_board_id_from_name(
 def fetch_pm_data_node(state: dict) -> dict:
 
     pm_data = state.get("pm_data") or {}
-    source = pm_data.get("source")
+    source = (
+        pm_data.get("source")
+        or state.get("source")
+        or "trello"
+      )
+    pm_data["source"] = source
+    state["pm_data"] = pm_data
+
 
     # ==========================================================
     # 🔥 HARD SAFETY
