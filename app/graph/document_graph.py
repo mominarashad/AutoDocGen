@@ -39,6 +39,7 @@ class WorkflowState(TypedDict, total=False):
     selected_headings: List[str]
     new_headings: List[str]
     intent: str
+    doc_type: str
 
 # =====================================================
 # GRAPH INIT
