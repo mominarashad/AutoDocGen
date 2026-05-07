@@ -269,8 +269,19 @@ async def start_workflow(request: Request, payload: dict):
     }
 
 
+def classify_user_intent(feedback: str):
+    text = feedback.lower()
+    if "add:" in text:
+        return "new_heading"
+    if "update" in text or "in section" in text:
+        return "edit_section"
+    if "improve" in text or "expand" in text or "detail" in text:
+        return "refine"
+    return "refine"
+
+
 # ======================================================
-# RESUME (UNCHANGED)
+# RESUME WORKFLOW — workflow (with checkpoint)
 # ======================================================
 @router.post("/resume")
 async def resume_workflow(request: Request, payload: dict):
@@ -288,30 +299,24 @@ async def resume_workflow(request: Request, payload: dict):
 
     config = {
         "configurable": {
-            "thread_id": (
-                f"{user_id}_{project_id}_{template}"
-            )
+            "thread_id": f"{user_id}_{project_id}_{template}"
         }
     }
 
+    intent = classify_user_intent(user_input)
+
     result = await workflow.ainvoke(
-        Command(
-            resume={
-                "user_feedback": user_input,
-                "new_headings": payload.get(
-                    "new_headings",
-                    []
-                ),
-                "is_final": is_final
-            }
-        ),
+        Command(resume={
+            "user_feedback": user_input,
+            "intent": intent,
+            "new_headings": payload.get("new_headings", []),
+            "is_final": is_final
+        }),
         config=config
     )
 
     final_doc = result.get("final_doc", "")
-
-    # clean duplicate headings
-    final_doc = clean_duplicate_headings(final_doc)
+    project_name = result.get("project_name") or project_id
 
     await save_generated_doc(
         db=db,
@@ -322,12 +327,10 @@ async def resume_workflow(request: Request, payload: dict):
         source=payload.get("source", "trello"),
         team_id=payload.get("team_id"),
         is_final=is_final,
-        workspace_name=project_id
+        workspace_name=project_name
     )
 
     return {
         "status": "completed",
-        "data": {
-            "final_doc": final_doc
-        }
+        "data": {"final_doc": final_doc}
     }
