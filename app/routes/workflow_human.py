@@ -90,9 +90,10 @@ async def build_state(payload: dict, db):
             "repo_owner": owner,
             "repo_name": repo,
             "repo_full": f"{owner}/{repo}",
-            "github_context": github_context["files"] if github_context else []
+            "github_context": github_context["files"] if github_context else [],
+            "project_id": f"{owner}/{repo}"
         }
-
+        project_id = f"{owner}/{repo}"
         project_name = f"{owner}/{repo}"
 
     # =========================
