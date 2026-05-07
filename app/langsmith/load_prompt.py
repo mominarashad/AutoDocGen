@@ -4,6 +4,19 @@ import os
 from langsmith import Client
 from langchain_core.prompts import PromptTemplate
 
+TEMPLATE_PROMPT_MAP = {
+    "srs": "prompt_srs",
+    "sprintreport": "prompt_sprint_report",
+    "wbs": "prompt_wbs",
+    "testcase": "prompt_testcase",
+    "usermanual": "prompt_user_manual",
+    "api": "prompt_api",
+    "readme": "prompt_readme",
+}
+
+DEFAULT_PROMPT = "doc_gen_prompt"
+
+
 def load_prompt_from_langsmith(prompt_name: str):
     """
     Load a prompt template directly from LangSmith Prompt Hub using the LangSmith Client.
