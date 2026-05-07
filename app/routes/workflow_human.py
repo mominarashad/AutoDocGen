@@ -310,7 +310,8 @@ async def resume_workflow(request: Request, payload: dict):
             "user_feedback": user_input,
             "intent": intent,
             "new_headings": payload.get("new_headings", []),
-            "is_final": is_final
+            "is_final": is_final,
+            "source": payload.get("source", "trello")
         }),
         config=config
     )
