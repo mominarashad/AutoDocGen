@@ -1,6 +1,11 @@
 import re
 from langchain_google_genai import ChatGoogleGenerativeAI
-from app.langsmith.load_prompt import load_prompt_from_langsmith
+from app.langsmith.load_prompt import (
+    load_prompt_from_langsmith,
+    TEMPLATE_PROMPT_MAP,
+    DEFAULT_PROMPT
+)
+
 from langgraph.config import get_stream_writer
 
 
@@ -10,9 +15,11 @@ def convert_to_sections(text: str):
     sections = {}
     current_heading = "intro"
     buffer = ""
+
     for part in parts:
         if not part:
             continue
+
         if part.startswith("#"):
             if buffer:
                 sections[current_heading] = buffer.strip()
@@ -20,8 +27,10 @@ def convert_to_sections(text: str):
             buffer = ""
         else:
             buffer += part
+
     if buffer:
         sections[current_heading] = buffer.strip()
+
     return sections
 
 
@@ -31,11 +40,19 @@ async def create_docs_node(state):
     pdf_headings = state.get("pdf_headings", [])
     selected_headings = state.get("selected_headings", [])
     user_feedback = state.get("user_feedback", "")
+    doc_type = state.get("doc_type", "default")   # ✅ ADDED
 
     if not pm_data:
         return {"draft_doc": "⚠️ No PM data found", "sections": {}}
 
-    prompt_template = load_prompt_from_langsmith("doc_gen_prompt")
+    # =========================
+    # ✅ TEMPLATE ROUTING LOGIC
+    # =========================
+    prompt_name = TEMPLATE_PROMPT_MAP.get(doc_type, DEFAULT_PROMPT)
+    prompt_template = load_prompt_from_langsmith(prompt_name)
+
+    print("📄 DOC TYPE:", doc_type)
+    print("🧠 PROMPT USED:", prompt_name)
 
     strict_instruction = """
 YOU ARE A STRICT DOCUMENT EDITOR.
@@ -74,12 +91,21 @@ DOCUMENT:
         selected_headings=selected_headings
     )
 
-    # ✅ NO STREAMING — single complete response
+    # =========================
+    # LLM CALL (NO STREAMING)
+    # =========================
     llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", streaming=False)
     result = await llm.ainvoke(prompt)
+
     full_text = result.content if hasattr(result, "content") else str(result)
 
     print("🔍 [doc_agent] OUTPUT LENGTH:", len(full_text))
 
     sections = convert_to_sections(full_text)
-    return {"draft_doc": full_text, "sections": sections}
+
+    return {
+        "draft_doc": full_text,
+        "sections": sections,
+        "doc_type": doc_type,
+        "prompt_used": prompt_name   # ✅ useful for debugging
+    }
