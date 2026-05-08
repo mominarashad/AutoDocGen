@@ -37,57 +37,52 @@ async def select_repo(request: Request, payload: dict):
     if not isinstance(repo, dict):
         return {"error": "Invalid repo format"}
 
-    # -----------------------------
+    # -------------------------
     # SAVE REPO
-    # -----------------------------
+    # -------------------------
     await save_github_repo(db, user_id, repo)
 
-    # -----------------------------
+    # -------------------------
     # GET TOKEN
-    # -----------------------------
+    # -------------------------
     token_doc = await get_github_token(db, user_id)
 
     if not token_doc:
-        return {"error": "GitHub token missing"}
+        return {"error": "GitHub not connected"}
 
     token = token_doc["access_token"]
 
-    owner = repo["owner"]["login"]
-    repo_name = repo["name"]
+    # -------------------------
+    # SAFE OWNER + REPO FIX (IMPORTANT)
+    # -------------------------
+    owner = repo.get("owner", {}).get("login")
+    repo_name = repo.get("name")
 
-    # -----------------------------
-    # WEBHOOK SETTINGS
-    # -----------------------------
+    if not owner or not repo_name:
+        raise ValueError("Invalid repo structure")
+
+    # -------------------------
+    # WEBHOOK CONFIG
+    # -------------------------
     webhook_url = os.getenv("GITHUB_WEBHOOK_URL")
-    webhook_secret = os.getenv("GITHUB_WEBHOOK_SECRET")
+    secret = os.getenv("GITHUB_WEBHOOK_SECRET")
 
-    # -----------------------------
+    # -------------------------
     # CREATE WEBHOOK
-    # -----------------------------
+    # -------------------------
     webhook = await create_github_webhook(
-        token=token,
-        owner=owner,
-        repo=repo_name,
-        webhook_url=webhook_url,
-        secret=webhook_secret
-    )
-
-    # -----------------------------
-    # SAVE WEBHOOK
-    # -----------------------------
-    await save_github_webhook(
-        db=db,
-        user_id=user_id,
-        repo_id=repo["id"],
-        webhook_data=webhook
+        token,
+        owner,
+        repo_name,
+        webhook_url,
+        secret
     )
 
     return {
         "status": "repo_saved",
-        "webhook_created": True,
-        "webhook_id": webhook["id"]
+        "webhook_id": webhook.get("id"),
+        "message": "Webhook created successfully"
     }
-
 
 # =========================
 # CODE CONTEXT (FOR LLM)
