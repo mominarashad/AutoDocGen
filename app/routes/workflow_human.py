@@ -73,7 +73,7 @@ async def build_state(payload: dict, db):
         project_name = channel_name
 
     # =========================
-    # GITHUB SOURCE (FIXED ONLY HERE)
+    # GITHUB SOURCE (FIXED)
     # =========================
     elif source == "github":
 
@@ -82,6 +82,7 @@ async def build_state(payload: dict, db):
         if not repo_doc:
             raise ValueError("GitHub repo not selected")
 
+        repo_id = repo_doc["repo_id"]
         owner = repo_doc["repo_owner"]
         repo = repo_doc["repo_name"]
 
@@ -92,13 +93,8 @@ async def build_state(payload: dict, db):
 
         token = token_doc["access_token"]
 
-        # fetch repo structure
         tree = await fetch_repo_tree(token, owner, repo)
 
-        if not tree:
-            raise ValueError("Failed to fetch GitHub repo")
-
-        # build smart LLM context
         github_context = await build_github_context(
             token,
             owner,
@@ -108,14 +104,14 @@ async def build_state(payload: dict, db):
 
         pm_data = {
             "source": "github",
+            "repo_id": repo_id,
             "repo_owner": owner,
             "repo_name": repo,
             "repo_full": f"{owner}/{repo}",
             "github_context": github_context,
-            "project_id": f"{owner}/{repo}"
         }
 
-        project_id = f"{owner}/{repo}"
+        project_id = repo_id
         project_name = f"{owner}/{repo}"
 
     # =========================
@@ -303,7 +299,7 @@ def classify_user_intent(feedback: str):
 
 
 # ======================================================
-# 🔁 RESUME WORKFLOW
+# RESUME WORKFLOW
 # ======================================================
 @router.post("/resume")
 async def resume_workflow(request: Request, payload: dict):
@@ -340,9 +336,6 @@ async def resume_workflow(request: Request, payload: dict):
 
     final_doc = result.get("final_doc", "")
 
-    # ======================================================
-    # ✅ FIX C APPLIED (CRITICAL)
-    # ======================================================
     project_name = result.get("project_name") or project_id
 
     await save_generated_doc(
@@ -354,11 +347,10 @@ async def resume_workflow(request: Request, payload: dict):
         source=payload.get("source", "trello"),
         team_id=payload.get("team_id"),
         is_final=is_final,
-        workspace_name=project_name  # ✅ FIXED
+        workspace_name=project_name
     )
 
     return {
         "status": "completed",
         "data": {"final_doc": final_doc}
     }
-
