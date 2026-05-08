@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
-from datetime import datetime  # ✅ added
+from datetime import datetime  
 
 # ------------------ Load ENV ------------------
 print("🔥 DEBUG: Loading environment variables...")
@@ -70,7 +70,7 @@ from app.routes.slack_messages import router as slack_messages_router
 from app.routes.github_auth import router as github_auth_router
 from app.routes.github_repo_router import router as github_repos_router
 from app.routes.github_webhook_router import router as github_webhook_router
-
+from app.routes.notification_router import router as notification_router
 
 
 print("🔥 DEBUG: Registering routers...")
@@ -89,6 +89,7 @@ app.include_router(workflow_human_router)
 app.include_router(github_auth_router)
 app.include_router(github_repos_router)
 app.include_router(github_webhook_router)
+app.include_router(notification_router)
 
 # ------------------ Services ------------------
 print("🔥 DEBUG: Loading services...")
