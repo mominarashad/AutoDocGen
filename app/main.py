@@ -69,6 +69,7 @@ from app.routes.slack_messages import router as slack_messages_router
 # ------------------ GitHub ------------------
 from app.routes.github_auth import router as github_auth_router
 from app.routes.github_repo_router import router as github_repos_router
+from app.routes.github_webhook_router import router as github_webhook_router
 
 
 
@@ -87,6 +88,7 @@ app.include_router(slack_messages_router, prefix="/api")
 app.include_router(workflow_human_router)
 app.include_router(github_auth_router)
 app.include_router(github_repos_router)
+app.include_router(github_webhook_router)
 
 # ------------------ Services ------------------
 print("🔥 DEBUG: Loading services...")
