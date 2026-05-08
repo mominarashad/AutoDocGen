@@ -3,6 +3,14 @@ from app.services.github_change_detector import (
     is_major_github_change
 )
 
+from app.services.github_notification_builder import (
+    build_github_message
+)
+
+from app.models.notification_model import (
+    save_notification
+)
+
 router = APIRouter()
 
 
@@ -60,7 +68,33 @@ async def github_webhook(request: Request):
         important_changes
     )
 
-    print(message)
+    # -----------------------------------
+    # FIND REPO
+    # -----------------------------------
+    repo = payload["repository"]["full_name"]
+
+    # -----------------------------------
+    # FIND REPO OWNER IN DB
+    # -----------------------------------
+    repo_doc = await request.app.state.db["github_repos"].find_one({
+        "repo_full_name": repo
+    })
+
+    if not repo_doc:
+        return {"status": "repo_not_registered"}
+
+    user_id = repo_doc["user_id"]
+
+    # -----------------------------------
+    # SAVE NOTIFICATION
+    # -----------------------------------
+    await save_notification(
+        db=request.app.state.db,
+        user_id=user_id,
+        source="github",
+        message=message,
+        project_id=repo
+    )
 
     # -----------------------------------
     # HERE:
