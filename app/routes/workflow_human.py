@@ -309,34 +309,43 @@ async def resume_workflow(request: Request, payload: dict):
     user_id = payload.get("user_id")
     project_id = payload.get("project_id")
     template = payload.get("template")
-
     user_input = payload.get("user_input", "")
     is_final = payload.get("is_final", False)
+    source = payload.get("source", "trello")
+    team_id = payload.get("team_id")
+    new_headings = payload.get("new_headings", [])
 
     if is_final:
         user_input = ""
 
+    # Rebuild full state instead of resuming from checkpoint
+    state = await build_state(payload, db)
+
+    # Inject feedback into state
+    state["user_feedback"] = user_input
+    state["is_final"] = is_final
+    state["new_headings"] = new_headings
+    state["intent"] = classify_user_intent(user_input)
+
     config = {
         "configurable": {
-            "thread_id": f"{user_id}_{project_id}_{template}"
+            "thread_id": f"{user_id}_{project_id}_{template}_resume"
         }
     }
 
-    intent = classify_user_intent(user_input)
+    final_doc = ""
 
-    result = await workflow.ainvoke(
-        Command(resume={
-            "user_feedback": user_input,
-            "intent": intent,
-            "new_headings": payload.get("new_headings", []),
-            "is_final": is_final
-        }),
-        config=config
-    )
+    async for event in workflow_fresh.astream(state, config=config, stream_mode="updates"):
+        if not isinstance(event, dict):
+            continue
+        for node_output in event.values():
+            if isinstance(node_output, dict) and node_output.get("final_doc"):
+                final_doc = node_output["final_doc"]
 
-    final_doc = result.get("final_doc", "")
+    if not final_doc:
+        final_doc = "⚠️ No document generated"
 
-    project_name = result.get("project_name") or project_id
+    project_name = state.get("project_name") or project_id
 
     await save_generated_doc(
         db=db,
@@ -344,8 +353,8 @@ async def resume_workflow(request: Request, payload: dict):
         project_id=project_id,
         template_name=template,
         content=final_doc,
-        source=payload.get("source", "trello"),
-        team_id=payload.get("team_id"),
+        source=source,
+        team_id=team_id,
         is_final=is_final,
         workspace_name=project_name
     )
