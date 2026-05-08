@@ -67,3 +67,30 @@ async def get_user_repos(db, user_id):
         repos.append(r)
 
     return repos
+
+def get_github_webhook_collection(db):
+    return db["github_webhooks"]
+
+
+async def save_github_webhook(
+    db,
+    user_id,
+    repo_id,
+    webhook_data
+):
+    col = get_github_webhook_collection(db)
+
+    await col.update_one(
+        {
+            "user_id": user_id,
+            "repo_id": repo_id
+        },
+        {
+            "$set": {
+                "webhook_id": webhook_data["id"],
+                "webhook_url": webhook_data["config"]["url"],
+                "updated_at": datetime.utcnow()
+            }
+        },
+        upsert=True
+    )
