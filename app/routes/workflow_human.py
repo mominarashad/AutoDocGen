@@ -117,6 +117,7 @@ async def build_state(payload: dict, db):
         project_id=project_id,
         user_id=user_id,
         template=template,
+        doc_type=template.lower().replace(" ", "")
         project_name=project_name,
         pm_data=pm_data,
         pdf_headings=pdf_headings,
