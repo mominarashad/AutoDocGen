@@ -1,4 +1,4 @@
-from app.services.github_service import fetch_file
+from app.services.github_code_service import fetch_file
 IMPORTANT_FILES = [
     "main.py", "app.py", "index.js", "server.js"
 ]
