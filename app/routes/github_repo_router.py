@@ -85,8 +85,10 @@ async def select_repo(request: Request, payload: dict):
         repo_name,
         webhook_url,
         secret
-    )
+           )
 
+
+    print("WEBHOOK RESULT:", webhook)
     return {
         "status": "repo_saved",
         "webhook_id": webhook.get("id"),
