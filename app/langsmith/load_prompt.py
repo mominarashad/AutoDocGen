@@ -12,6 +12,13 @@ TEMPLATE_PROMPT_MAP = {
     "usermanual": "prompt_user_manual",
     "api": "prompt_api",
     "readme": "prompt_readme",
+    "authenticate":"prompt_authen",
+    "backend":"prompt_backend",
+    "configuration":"prompt_configure",
+    "database":"prompt_db",
+    "risk","prompt_risk",
+    "deploy":"prompt_deploy",
+    
 }
 
 DEFAULT_PROMPT = "doc_gen_prompt"
