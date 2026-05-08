@@ -43,10 +43,10 @@ def fetch_pm_data_node(state: dict) -> dict:
         pm_data.get("source")
         or state.get("source")
         or "trello"
-      )
+    )
+
     pm_data["source"] = source
     state["pm_data"] = pm_data
-
 
     # ==========================================================
     # 🔥 HARD SAFETY
@@ -63,7 +63,18 @@ def fetch_pm_data_node(state: dict) -> dict:
         return state
 
     # ==========================================================
-    # 🟢 TRELLO FLOW
+    # 🟢 GITHUB FLOW (NEW FIX)
+    # ==========================================================
+    if source == "github":
+        print("✅ GitHub detected → bypassing Trello completely")
+
+        # GitHub already handled upstream in build_state
+        # so we just pass state forward safely
+        state["pm_data"] = pm_data
+        return state
+
+    # ==========================================================
+    # 🟡 TRELLO FLOW
     # ==========================================================
     if source != "trello":
         raise ValueError(f"Unknown source: {source}")
@@ -72,11 +83,12 @@ def fetch_pm_data_node(state: dict) -> dict:
     trello_token = state.get("user_trello_token") or os.getenv("TRELLO_TOKEN")
 
     project_id = (
-              state.get("project_id")
-             or state.get("pm_data", {}).get("project_id")
-             or state.get("pm_data", {}).get("board_id")
-               or state.get("pm_data", {}).get("channel_id")
-          )
+        state.get("project_id")
+        or state.get("pm_data", {}).get("project_id")
+        or state.get("pm_data", {}).get("board_id")
+        or state.get("pm_data", {}).get("channel_id")
+    )
+
     project_name = state.get("project_name")
 
     if not trello_key:
@@ -86,13 +98,15 @@ def fetch_pm_data_node(state: dict) -> dict:
         raise ValueError("Trello token missing in workflow state")
 
     if not project_id and not project_name:
-           project_id = state.get("pm_data", {}).get("channel_id") \
-              or state.get("pm_data", {}).get("board_id")
+        project_id = (
+            state.get("pm_data", {}).get("channel_id")
+            or state.get("pm_data", {}).get("board_id")
+        )
 
     if not project_id and not project_name:
-             raise ValueError(
-             "Both project_id and project_name are missing even after recovery"
-            )
+        raise ValueError(
+            "Both project_id and project_name are missing even after recovery"
+        )
 
     # --------------------------------------------------
     # Fetch Trello cards (SYNC)
