@@ -309,43 +309,110 @@ async def resume_workflow(request: Request, payload: dict):
     user_id = payload.get("user_id")
     project_id = payload.get("project_id")
     template = payload.get("template")
+
+    if not user_id or not project_id or not template:
+        raise ValueError("Missing required fields")
+
+    action = payload.get("action", "save")  # ✅ NEW CONTROL FLAG
     user_input = payload.get("user_input", "")
     is_final = payload.get("is_final", False)
     source = payload.get("source", "trello")
     team_id = payload.get("team_id")
     new_headings = payload.get("new_headings", [])
+    final_doc = payload.get("final_doc", "")
 
-    if is_final:
-        user_input = ""
+    # ======================================================
+    # CASE 1: ONLY SAVE (NO LLM)
+    # ======================================================
+    if action in ["save", "approve"]:
+        if not final_doc:
+            raise ValueError("final_doc is required for saving")
 
-    # Rebuild full state instead of resuming from checkpoint
-    state = await build_state(payload, db)
+        project_name = payload.get("project_name") or project_id
 
-    # Inject feedback into state
-    state["user_feedback"] = user_input
-    state["is_final"] = is_final
-    state["new_headings"] = new_headings
-    state["intent"] = classify_user_intent(user_input)
+        await save_generated_doc(
+            db=db,
+            user_id=user_id,
+            project_id=project_id,
+            template_name=template,
+            content=final_doc,
+            source=source,
+            team_id=team_id,
+            is_final=is_final,
+            workspace_name=project_name
+        )
 
-    config = {
-        "configurable": {
-            "thread_id": f"{user_id}_{project_id}_{template}_resume"
+        return {
+            "status": "saved",
+            "message": "Document saved without regeneration"
         }
+
+    # ======================================================
+    # CASE 2: REGENERATE (ONLY WHEN USER WANTS CHANGES)
+    # ======================================================
+    if action == "regenerate":
+
+        state = await build_state(payload, db)
+
+        state["user_feedback"] = user_input
+        state["is_final"] = is_final
+        state["new_headings"] = new_headings
+        state["intent"] = classify_user_intent(user_input)
+
+        config = {
+            "configurable": {
+                "thread_id": f"{user_id}_{project_id}_{template}_resume"
+            }
+        }
+
+        final_doc = ""
+
+        async for event in workflow_fresh.astream(
+            state,
+            config=config,
+            stream_mode="updates"
+        ):
+            if not isinstance(event, dict):
+                continue
+
+            for node_output in event.values():
+                if isinstance(node_output, dict) and node_output.get("final_doc"):
+                    final_doc = node_output["final_doc"]
+
+        if not final_doc:
+            final_doc = "⚠️ No document generated"
+
+        return {
+            "status": "regenerated",
+            "data": {"final_doc": final_doc}
+        }
+
+    # ======================================================
+    # INVALID ACTION
+    # ======================================================
+    return {
+        "status": "error",
+        "message": "Invalid action. Use 'save', 'approve', or 'regenerate'."
     }
 
-    final_doc = ""
+@router.post("/finalize")
+async def finalize_workflow(request: Request, payload: dict):
 
-    async for event in workflow_fresh.astream(state, config=config, stream_mode="updates"):
-        if not isinstance(event, dict):
-            continue
-        for node_output in event.values():
-            if isinstance(node_output, dict) and node_output.get("final_doc"):
-                final_doc = node_output["final_doc"]
+    db = request.app.state.db
+
+    user_id = payload.get("user_id")
+    project_id = payload.get("project_id")
+    template = payload.get("template")
+    final_doc = payload.get("final_doc")
+    source = payload.get("source", "trello")
+    team_id = payload.get("team_id")
+    project_name = payload.get("project_name") or project_id
+
+    if not user_id or not project_id or not template:
+        raise ValueError("Missing required fields")
 
     if not final_doc:
-        final_doc = "⚠️ No document generated"
-
-    project_name = state.get("project_name") or project_id
+        raise ValueError("final_doc is required")
 
     await save_generated_doc(
         db=db,
@@ -355,11 +422,11 @@ async def resume_workflow(request: Request, payload: dict):
         content=final_doc,
         source=source,
         team_id=team_id,
-        is_final=is_final,
+        is_final=True,
         workspace_name=project_name
     )
 
     return {
         "status": "completed",
-        "data": {"final_doc": final_doc}
+        "message": "Final document saved successfully"
     }
