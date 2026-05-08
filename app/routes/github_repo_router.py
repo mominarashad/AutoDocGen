@@ -24,7 +24,7 @@ async def get_repos(user_id: str, request: Request):
 
 
 # =========================
-# SELECT REPO (FIXED)
+# SELECT REPO (FIXED + NON-BLOCKING WEBHOOK)
 # =========================
 @router.post("/github/select-repo")
 async def select_repo(request: Request, payload: dict):
@@ -76,23 +76,46 @@ async def select_repo(request: Request, payload: dict):
     webhook_url = os.getenv("GITHUB_WEBHOOK_URL")
     secret = os.getenv("GITHUB_WEBHOOK_SECRET")
 
-    # -------------------------
-    # CREATE WEBHOOK
-    # -------------------------
-    webhook = await create_github_webhook(
-        token,
-        owner,
-        repo_name,
-        webhook_url,
-        secret
-           )
+    # =====================================================
+    # 🔥 NON-BLOCKING WEBHOOK (FIX APPLIED)
+    # =====================================================
+    webhook_id = None
+    webhook_status = "skipped"
 
+    try:
+        webhook = await create_github_webhook(
+            token,
+            owner,
+            repo_name,
+            webhook_url,
+            secret
+        )
 
-    print("WEBHOOK RESULT:", webhook)
+        webhook_id = webhook.get("id")
+        webhook_status = "created"
+
+    except Exception as e:
+        msg = str(e)
+
+        # safe ignore cases
+        if "already exists" in msg or "422" in msg:
+            print("⚠️ Webhook already exists - continuing workflow")
+            webhook_status = "exists"
+        else:
+            print("❌ Webhook failed but ignoring:", msg)
+            webhook_status = "failed"
+
+    print("WEBHOOK STATUS:", webhook_status)
+    print("WEBHOOK ID:", webhook_id)
+
+    # =====================================================
+    # FINAL RESPONSE (NON-BLOCKING)
+    # =====================================================
     return {
         "status": "repo_saved",
-        "webhook_id": webhook.get("id"),
-        "message": "Webhook created successfully"
+        "webhook_id": webhook_id,
+        "webhook_status": webhook_status,
+        "message": "Repo saved successfully (workflow continues regardless of webhook)"
     }
 
 
