@@ -323,12 +323,11 @@ async def resume_workflow(request: Request, payload: dict):
 
     intent = classify_user_intent(user_input)
     state_patch = {
-        "project_id": project_id,
-        "project_name": template,
-        "pm_data": {
-            "source": payload.get("source", "trello")
-        }
-    }
+    "user_feedback": user_input,
+    "intent": intent,
+    "new_headings": payload.get("new_headings", []),
+    "is_final": is_final
+}
 
     result = await workflow.ainvoke(
         Command(resume={
