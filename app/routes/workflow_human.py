@@ -14,8 +14,7 @@ import asyncio
 
 # ✅ ONLY ADDED (GitHub fix)
 from app.services.github_context_builder import build_github_context
-from app.services.github_service import fetch_repo_contents
-from app.services.github_code_service import fetch_repo_tree, fetch_file
+from app.services.github_code_service import fetch_repo_tree
 from app.models.github_model import get_github_token
 
 
