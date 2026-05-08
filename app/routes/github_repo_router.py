@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request
-from app.models.github_model import get_github_token, save_github_repo,save_github_webhook
-from app.services.github_service import fetch_user_repos,create_github_webhook
+from app.models.github_model import get_github_token, save_github_repo, save_github_webhook
+from app.services.github_service import fetch_user_repos, create_github_webhook
 from app.services.github_code_service import fetch_repo_tree, fetch_file
 import os
 
@@ -52,14 +52,23 @@ async def select_repo(request: Request, payload: dict):
 
     token = token_doc["access_token"]
 
-    # -------------------------
-    # SAFE OWNER + REPO FIX (IMPORTANT)
-    # -------------------------
-    owner = repo.get("owner", {}).get("login")
-    repo_name = repo.get("name")
+    # =====================================================
+    # 🔥 DEBUG (MANDATORY)
+    # =====================================================
+    print("FULL REPO OBJECT:", repo)
 
-    if not owner or not repo_name:
-        raise ValueError("Invalid repo structure")
+    # =====================================================
+    # 🔧 FIXED OWNER + REPO EXTRACTION
+    # =====================================================
+    full_name = repo.get("full_name")  # "owner/repo"
+
+    if not full_name:
+        raise ValueError("Missing full_name in repo object")
+
+    owner, repo_name = full_name.split("/")
+
+    print("OWNER:", owner)
+    print("REPO:", repo_name)
 
     # -------------------------
     # WEBHOOK CONFIG
@@ -83,6 +92,7 @@ async def select_repo(request: Request, payload: dict):
         "webhook_id": webhook.get("id"),
         "message": "Webhook created successfully"
     }
+
 
 # =========================
 # CODE CONTEXT (FOR LLM)
@@ -127,7 +137,7 @@ async def get_repo_code_context(user_id: str, request: Request):
 
             files.append({
                 "path": item["path"],
-                "content": content[:6000]  # trim for LLM
+                "content": content[:6000]
             })
 
         except:
