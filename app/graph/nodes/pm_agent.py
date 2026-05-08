@@ -83,11 +83,12 @@ def fetch_pm_data_node(state: dict) -> dict:
     trello_token = state.get("user_trello_token") or os.getenv("TRELLO_TOKEN")
 
     project_id = (
-        state.get("project_id")
-        or state.get("pm_data", {}).get("project_id")
-        or state.get("pm_data", {}).get("board_id")
-        or state.get("pm_data", {}).get("channel_id")
-    )
+    state.get("project_id")
+    or (state.get("pm_data") or {}).get("project_id")
+    or (state.get("pm_data") or {}).get("board_id")
+    or (state.get("pm_data") or {}).get("channel_id")
+    or (state.get("pm_data") or {}).get("repo_id")
+)
 
     project_name = state.get("project_name")
 
