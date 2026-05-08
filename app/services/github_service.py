@@ -89,3 +89,20 @@ async def create_github_webhook(token, owner, repo, webhook_url, secret):
         raise Exception(f"Webhook creation failed: {res.text}")
 
     return res.json()
+
+async def get_existing_webhooks(token, owner, repo):
+
+    url = f"{GITHUB_API}/repos/{owner}/{repo}/hooks"
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json"
+    }
+
+    async with httpx.AsyncClient() as client:
+        res = await client.get(url, headers=headers)
+
+    if res.status_code != 200:
+        raise Exception(f"Failed to fetch webhooks: {res.text}")
+
+    return res.json()
