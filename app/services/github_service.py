@@ -27,6 +27,7 @@ async def fetch_repo_contents(access_token: str, owner: str, repo: str, path="")
     }
 
     url = f"{GITHUB_API}/repos/{owner}/{repo}/contents/{path}"
+    print("WEBHOOK TARGET URL:", url)
 
     async with httpx.AsyncClient() as client:
         res = await client.get(url, headers=headers)
