@@ -59,9 +59,19 @@ async def fetch_repo_contents(access_token: str, owner: str, repo: str, path="")
 
 async def create_github_webhook(token, owner, repo, webhook_url, secret):
 
-    # 🔥 DEBUG (TEMP - keep until fixed)
-    print("CREATE WEBHOOK FOR:", owner, repo)
+    # 1️⃣ CHECK EXISTING HOOKS
+    existing_hooks = await get_existing_webhooks(token, owner, repo)
 
+    for hook in existing_hooks:
+        config = hook.get("config", {})
+        if config.get("url") == webhook_url:
+            print("✅ Webhook already exists — skipping creation")
+            return {
+                "status": "exists",
+                "id": hook.get("id")
+            }
+
+    # 2️⃣ CREATE ONLY IF NOT EXISTS
     url = f"{GITHUB_API}/repos/{owner}/{repo}/hooks"
 
     headers = {
@@ -83,13 +93,11 @@ async def create_github_webhook(token, owner, repo, webhook_url, secret):
     async with httpx.AsyncClient() as client:
         res = await client.post(url, json=payload, headers=headers)
 
-    # 🔥 IMPORTANT DEBUG
+    # 3️⃣ SAFE ERROR HANDLING
     if res.status_code not in [200, 201]:
-        print("❌ GitHub Webhook Error:", res.status_code, res.text)
         raise Exception(f"Webhook creation failed: {res.text}")
 
     return res.json()
-
 async def get_existing_webhooks(token, owner, repo):
 
     url = f"{GITHUB_API}/repos/{owner}/{repo}/hooks"
