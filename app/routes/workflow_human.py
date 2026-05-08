@@ -12,6 +12,12 @@ import os
 import json
 import asyncio
 
+# ✅ ONLY ADDED (GitHub fix)
+from app.services.github_context_builder import build_github_context
+from app.services.github_service import fetch_repo_tree
+from app.models.github_model import get_github_token
+
+
 router = APIRouter(prefix="/workflow")
 
 
@@ -67,7 +73,7 @@ async def build_state(payload: dict, db):
         project_name = channel_name
 
     # =========================
-    # GITHUB SOURCE (FIXED)
+    # GITHUB SOURCE (FIXED ONLY HERE)
     # =========================
     elif source == "github":
 
@@ -79,20 +85,36 @@ async def build_state(payload: dict, db):
         owner = repo_doc["repo_owner"]
         repo = repo_doc["repo_name"]
 
-        # fetch stored repo code context
-        github_context = await db["github_context"].find_one({
-            "user_id": user_id,
-            "repo_full_name": f"{owner}/{repo}"
-        })
+        token_doc = await get_github_token(db, user_id)
+
+        if not token_doc:
+            raise ValueError("GitHub not connected")
+
+        token = token_doc["access_token"]
+
+        # fetch repo structure
+        tree = await fetch_repo_tree(token, owner, repo)
+
+        if not tree:
+            raise ValueError("Failed to fetch GitHub repo")
+
+        # build smart LLM context
+        github_context = await build_github_context(
+            token,
+            owner,
+            repo,
+            tree
+        )
 
         pm_data = {
             "source": "github",
             "repo_owner": owner,
             "repo_name": repo,
             "repo_full": f"{owner}/{repo}",
-            "github_context": github_context["files"] if github_context else [],
+            "github_context": github_context,
             "project_id": f"{owner}/{repo}"
         }
+
         project_id = f"{owner}/{repo}"
         project_name = f"{owner}/{repo}"
 
@@ -131,7 +153,7 @@ async def build_state(payload: dict, db):
 
 
 # ======================================================
-# STREAMING ENDPOINT (FIXED PROPER STREAMING)
+# STREAMING ENDPOINT (UNCHANGED)
 # ======================================================
 @router.post("/start-stream")
 async def start_workflow_stream(request: Request, payload: dict):
@@ -163,11 +185,8 @@ async def start_workflow_stream(request: Request, payload: dict):
             if not isinstance(event, dict):
                 continue
 
-            # interrupt handling
             if "__interrupt__" in event:
                 interrupt_data = event["__interrupt__"][0]
-
-                # Get the value dict from the Interrupt object
                 interrupt_value = getattr(interrupt_data, "value", {})
 
                 yield "data: " + json.dumps({
@@ -182,11 +201,9 @@ async def start_workflow_stream(request: Request, payload: dict):
                 if isinstance(node_output, dict) and node_output.get("final_doc"):
                     final_doc = node_output["final_doc"]
 
-        # ================= FIX: STREAM FINAL DOC AS TOKENS =================
         if not final_doc:
             final_doc = "⚠️ No document generated"
 
-        # chunk streaming (REAL FIX)
         chunk_size = 20
         for i in range(0, len(final_doc), chunk_size):
             chunk = final_doc[i:i+chunk_size]
@@ -198,7 +215,6 @@ async def start_workflow_stream(request: Request, payload: dict):
 
             await asyncio.sleep(0.01)
 
-        # save
         await save_generated_doc(
             db=db,
             user_id=state["user_id"],
@@ -283,7 +299,7 @@ def classify_user_intent(feedback: str):
 
 
 # ======================================================
-# RESUME WORKFLOW — workflow (with checkpoint)
+# RESUME WORKFLOW — workflow (UNCHANGED)
 # ======================================================
 @router.post("/resume")
 async def resume_workflow(request: Request, payload: dict):
@@ -307,12 +323,12 @@ async def resume_workflow(request: Request, payload: dict):
 
     intent = classify_user_intent(user_input)
     state_patch = {
-    "project_id": project_id,
-    "project_name": template,
-    "pm_data": {
-        "source": payload.get("source", "trello")
+        "project_id": project_id,
+        "project_name": template,
+        "pm_data": {
+            "source": payload.get("source", "trello")
         }
-       }
+    }
 
     result = await workflow.ainvoke(
         Command(resume={
@@ -321,7 +337,6 @@ async def resume_workflow(request: Request, payload: dict):
             "intent": intent,
             "new_headings": payload.get("new_headings", []),
             "is_final": is_final,
-            
         }),
         config=config
     )
