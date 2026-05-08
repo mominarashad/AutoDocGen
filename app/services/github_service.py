@@ -56,13 +56,10 @@ async def fetch_repo_contents(access_token: str, owner: str, repo: str, path="")
 
     return result
 
-async def create_github_webhook(
-    token: str,
-    owner: str,
-    repo: str,
-    webhook_url: str,
-    secret: str
-):
+async def create_github_webhook(token, owner, repo, webhook_url, secret):
+
+    # 🔥 DEBUG (TEMP - keep until fixed)
+    print("CREATE WEBHOOK FOR:", owner, repo)
 
     url = f"{GITHUB_API}/repos/{owner}/{repo}/hooks"
 
@@ -74,29 +71,20 @@ async def create_github_webhook(
     payload = {
         "name": "web",
         "active": True,
-        "events": [
-            "push",
-            "pull_request",
-            "release"
-        ],
+        "events": ["push", "pull_request", "release"],
         "config": {
             "url": webhook_url,
             "content_type": "json",
-            "secret": secret,
-            "insecure_ssl": "0"
+            "secret": secret
         }
     }
 
     async with httpx.AsyncClient() as client:
-        res = await client.post(
-            url,
-            headers=headers,
-            json=payload
-        )
+        res = await client.post(url, json=payload, headers=headers)
 
+    # 🔥 IMPORTANT DEBUG
     if res.status_code not in [200, 201]:
-        raise Exception(
-            f"Webhook creation failed: {res.text}"
-        )
+        print("❌ GitHub Webhook Error:", res.status_code, res.text)
+        raise Exception(f"Webhook creation failed: {res.text}")
 
     return res.json()
