@@ -289,17 +289,21 @@ async def start_workflow(request: Request, payload: dict):
 
 def classify_user_intent(feedback: str):
     text = feedback.lower()
+
     if "add:" in text:
         return "new_heading"
+
     if "update" in text or "in section" in text:
         return "edit_section"
+
     if "improve" in text or "expand" in text or "detail" in text:
         return "refine"
+
     return "refine"
 
 
 # ======================================================
-# RESUME WORKFLOW — workflow (UNCHANGED)
+# 🔁 RESUME WORKFLOW
 # ======================================================
 @router.post("/resume")
 async def resume_workflow(request: Request, payload: dict):
@@ -309,6 +313,7 @@ async def resume_workflow(request: Request, payload: dict):
     user_id = payload.get("user_id")
     project_id = payload.get("project_id")
     template = payload.get("template")
+
     user_input = payload.get("user_input", "")
     is_final = payload.get("is_final", False)
 
@@ -322,25 +327,22 @@ async def resume_workflow(request: Request, payload: dict):
     }
 
     intent = classify_user_intent(user_input)
-    state_patch = {
-    "user_feedback": user_input,
-    "intent": intent,
-    "new_headings": payload.get("new_headings", []),
-    "is_final": is_final
-}
 
     result = await workflow.ainvoke(
         Command(resume={
-            **state_patch,
             "user_feedback": user_input,
             "intent": intent,
             "new_headings": payload.get("new_headings", []),
-            "is_final": is_final,
+            "is_final": is_final
         }),
         config=config
     )
 
     final_doc = result.get("final_doc", "")
+
+    # ======================================================
+    # ✅ FIX C APPLIED (CRITICAL)
+    # ======================================================
     project_name = result.get("project_name") or project_id
 
     await save_generated_doc(
@@ -352,10 +354,11 @@ async def resume_workflow(request: Request, payload: dict):
         source=payload.get("source", "trello"),
         team_id=payload.get("team_id"),
         is_final=is_final,
-        workspace_name=project_name
+        workspace_name=project_name  # ✅ FIXED
     )
 
     return {
         "status": "completed",
         "data": {"final_doc": final_doc}
     }
+
