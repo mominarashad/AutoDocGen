@@ -77,10 +77,15 @@ async def build_state(payload: dict, db):
     # =========================
     elif source == "github":
 
-        repo_doc = await db["github_repos"].find_one({"user_id": user_id})
+        repo_doc = await db["github_repos"].find_one(
+                {"user_id": user_id},
+                sort=[("updated_at", -1)]
+)
 
         if not repo_doc:
             raise ValueError("GitHub repo not selected")
+
+        print("USING GITHUB REPO:", repo_doc["repo_full_name"])
 
         repo_id = repo_doc["repo_id"]
         owner = repo_doc["repo_owner"]
