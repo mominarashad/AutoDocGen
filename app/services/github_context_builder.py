@@ -1,3 +1,4 @@
+from app.services.github_service import fetch_file
 IMPORTANT_FILES = [
     "main.py", "app.py", "index.js", "server.js"
 ]
@@ -25,3 +26,33 @@ def is_important(path: str):
         return True
 
     return False
+
+async def build_github_context(token, owner, repo, tree):
+    context = []
+
+    for item in tree.get("tree", []):
+
+        if item["type"] != "blob":
+            continue
+
+        path = item["path"]
+
+        # ✅ APPLY YOUR FILTER LOGIC
+        if not is_important(path):
+            continue
+
+        try:
+            content = await fetch_file(token, owner, repo, path)
+
+            context.append({
+                "path": path,
+                "content": content[:4000]  # LLM-safe trim
+            })
+
+        except Exception:
+            continue
+
+        if len(context) >= 20:
+            break
+
+    return context
