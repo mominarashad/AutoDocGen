@@ -20,7 +20,7 @@ async def github_connect(user_id: str):
     url = (
         "https://github.com/login/oauth/authorize"
         f"?client_id={CLIENT_ID}"
-        f"&scope=repo read:user"
+        f"&scope=repo admin:repo_hook read:user"
         f"&redirect_uri={REDIRECT_URI}"
         f"&state={user_id}"
     )
