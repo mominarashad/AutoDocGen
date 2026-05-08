@@ -32,7 +32,6 @@ async def get_github_token(db, user_id):
 
 async def save_github_repo(db, user_id, repo):
 
-    # 🔥 safety guard
     if not isinstance(repo, dict):
         raise ValueError("Repo must be a dictionary")
 
@@ -42,20 +41,18 @@ async def save_github_repo(db, user_id, repo):
 
     col = get_github_repo_collection(db)
 
-    await col.update_one(
-        {"user_id": user_id, "repo_id": repo.get("id")},
-        {
-            "$set": {
-                "repo_id": repo.get("id"),
-                "repo_name": repo.get("name"),
-                "repo_full_name": repo.get("full_name"),
-                "repo_owner": owner.get("login"),
-                "default_branch": repo.get("default_branch", "main"),
-                "updated_at": datetime.utcnow()
-            }
-        },
-        upsert=True
-    )
+    # 🚨 IMPORTANT FIX: DELETE OLD REPOS FIRST
+    await col.delete_many({"user_id": user_id})
+
+    await col.insert_one({
+        "user_id": user_id,
+        "repo_id": repo.get("id"),
+        "repo_name": repo.get("name"),
+        "repo_full_name": repo.get("full_name"),
+        "repo_owner": owner.get("login"),
+        "default_branch": repo.get("default_branch", "main"),
+        "updated_at": datetime.utcnow()
+    })
 
 async def get_user_repos(db, user_id):
     col = get_github_repo_collection(db)
