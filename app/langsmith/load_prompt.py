@@ -16,7 +16,7 @@ TEMPLATE_PROMPT_MAP = {
     "backend":"prompt_backend",
     "configuration":"prompt_configure",
     "database":"prompt_db",
-    "risk","prompt_risk",
+    "risk":"prompt_risk",
     "deploy":"prompt_deploy",
     
 }
