@@ -40,7 +40,7 @@ async def create_docs_node(state):
     pdf_headings = state.get("pdf_headings", [])
     selected_headings = state.get("selected_headings", [])
     user_feedback = state.get("user_feedback", "")
-    doc_type = state.get("doc_type", "default")   # ✅ ADDED
+    doc_type = state.get("doc_type") or state.get("template", "")
 
     if not pm_data:
         return {"draft_doc": "⚠️ No PM data found", "sections": {}}
