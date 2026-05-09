@@ -72,13 +72,28 @@ async def create_checkout(request: Request, payload: dict):
     }
 
 @router.post("/create-payment-intent")
-async def create_payment(data: dict):
-    intent = stripe.PaymentIntent.create(
-        amount=900,
-        currency="usd",
-        automatic_payment_methods={"enabled": True},
-    )
+async def create_payment_intent(data: dict):
+    try:
+        plan = data.get("plan")
 
-    return {
-        "clientSecret": intent.client_secret
-    }
+        amount_map = {
+            "starter": 900,
+            "pro": 2900,
+            "team": 4900
+        }
+
+        amount = amount_map.get(plan, 900)
+
+        intent = stripe.PaymentIntent.create(
+            amount=amount,
+            currency="usd",
+            automatic_payment_methods={"enabled": True},
+        )
+
+        return {
+            "clientSecret": intent.client_secret
+        }
+
+    except Exception as e:
+        print("Stripe error:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
