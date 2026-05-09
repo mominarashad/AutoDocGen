@@ -68,3 +68,10 @@ async def create_checkout(request: Request, payload: dict):
     return {
         "url": session.url
     }
+
+@router.post("/create-payment-intent")
+async def create_payment(data: dict):
+    stripe.PaymentIntent.create(
+        amount=900,
+        currency="usd"
+    )
