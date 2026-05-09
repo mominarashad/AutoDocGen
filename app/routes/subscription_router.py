@@ -5,7 +5,7 @@ from app.models.subscription_model import (
     PLAN_LIMITS,
     PlanType
 )
-
+from app.services.stripe_service import create_checkout_session
 router = APIRouter(prefix="/subscription", tags=["Subscription"])
 
 
@@ -54,3 +54,17 @@ async def upgrade(request: Request, payload: dict):
     await upgrade_plan(user_id, new_plan, db)
 
     return {"status": "upgraded", "plan": new_plan}
+
+@router.post("/create-checkout-session")
+async def create_checkout(request: Request, payload: dict):
+    user_id = payload.get("user_id")
+    plan = payload.get("plan")
+
+    if not user_id or not plan:
+        raise HTTPException(status_code=400, detail="Missing data")
+
+    session = create_checkout_session(user_id, plan)
+
+    return {
+        "url": session.url
+    }
