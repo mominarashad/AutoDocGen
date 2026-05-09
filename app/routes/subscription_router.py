@@ -6,6 +6,8 @@ from app.models.subscription_model import (
     PlanType
 )
 from app.services.stripe_service import create_checkout_session
+import stripe
+
 router = APIRouter(prefix="/subscription", tags=["Subscription"])
 
 
@@ -71,7 +73,12 @@ async def create_checkout(request: Request, payload: dict):
 
 @router.post("/create-payment-intent")
 async def create_payment(data: dict):
-    stripe.PaymentIntent.create(
+    intent = stripe.PaymentIntent.create(
         amount=900,
-        currency="usd"
+        currency="usd",
+        automatic_payment_methods={"enabled": True},
     )
+
+    return {
+        "clientSecret": intent.client_secret
+    }
