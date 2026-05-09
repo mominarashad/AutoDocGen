@@ -9,7 +9,7 @@ from app.services.stripe_service import create_checkout_session
 import stripe
 
 router = APIRouter(prefix="/subscription", tags=["Subscription"])
-
+endpoint_secret = "bambarbola-dagmagola-dagmagdola"
 
 @router.get("/status")
 async def get_status(user_id: str, request: Request):
@@ -88,7 +88,11 @@ async def create_payment_intent(data: dict):
             amount=amount,
             currency="usd",
             automatic_payment_methods={"enabled": True},
-        )
+            metadata={
+                "user_id": data.get("user_id"),
+                "plan": plan
+    }
+)
 
         return {
             "clientSecret": intent.client_secret
@@ -97,3 +101,29 @@ async def create_payment_intent(data: dict):
     except Exception as e:
         print("Stripe error:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/stripe-webhook")
+async def stripe_webhook(request: Request):
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature")
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, endpoint_secret
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # PAYMENT SUCCESS EVENT
+    if event["type"] == "payment_intent.succeeded":
+        payment = event["data"]["object"]
+
+        # extract metadata
+        user_id = payment["metadata"]["user_id"]
+        plan = payment["metadata"]["plan"]
+
+        # update DB here
+        await upgrade_plan(user_id, plan, request.app.state.db)
+
+    return {"status": "success"}
