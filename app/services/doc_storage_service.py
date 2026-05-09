@@ -1,7 +1,7 @@
 import re
 from datetime import datetime
 
-# ✅ ADDED
+#  ADDED
 from app.models.subscription_model import (
     can_generate_doc,
     increment_doc_count,
@@ -22,7 +22,7 @@ async def save_generated_doc(
     collection = db["generated_docs"]
 
     # ======================================================
-    # ✅ SUBSCRIPTION CHECK
+    #  SUBSCRIPTION CHECK
     # ======================================================
     allowed, reason = await can_generate_doc(user_id, db)
 
@@ -32,7 +32,7 @@ async def save_generated_doc(
         )
 
     # ======================================================
-    # ✅ DEDUPLICATE CONTENT BEFORE SAVING
+    #  DEDUPLICATE CONTENT BEFORE SAVING
     # ======================================================
     def deduplicate_content(text: str) -> str:
         paragraphs = re.split(r'\n{2,}', text)
@@ -72,7 +72,7 @@ async def save_generated_doc(
     )
 
     # ======================================================
-    # 🔢 GET NEXT VERSION
+    #  GET NEXT VERSION
     # ======================================================
     last_doc = await collection.find_one(
         {
@@ -88,10 +88,26 @@ async def save_generated_doc(
     ) if last_doc else 1
 
     # ======================================================
-    # 💾 INSERT NEW DOCUMENT AS LATEST
+    #  GET WORKSPACE INFO
+    # ======================================================
+    workspace = await db["workspaces"].find_one(
+        {"members": user_id}
+    )
+
+    workspace_id = None
+    workspace_owner_id = None
+
+    if workspace:
+        workspace_id = str(workspace["_id"])
+        workspace_owner_id = workspace["owner_id"]
+
+    # ======================================================
+    # INSERT NEW DOCUMENT AS LATEST
     # ======================================================
     await collection.insert_one({
         "user_id": user_id,
+        "workspace_id": workspace_id,
+        "workspace_owner_id": workspace_owner_id,
         "project_id": project_id,
         "template_name": template_name,
         "generated_docs": content,
@@ -116,7 +132,7 @@ async def save_generated_doc(
 
 
 # ======================================================
-# 🧩 SPLIT DOCUMENT INTO SECTIONS
+#  SPLIT DOCUMENT INTO SECTIONS
 # ======================================================
 def split_into_sections(doc: str) -> dict:
 
