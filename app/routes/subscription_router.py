@@ -9,7 +9,7 @@ from app.services.stripe_service import create_checkout_session
 import stripe
 
 router = APIRouter(prefix="/subscription", tags=["Subscription"])
-endpoint_secret = "bambarbola-dagmagola-dagmagdola"
+endpoint_secret = "whsec_54YKPf52lRejBgw1YXsfZ1uYzJARRTyG"
 
 @router.get("/status")
 async def get_status(user_id: str, request: Request):
