@@ -74,8 +74,8 @@ from app.routes.github_webhook_router import router as github_webhook_router
 from app.routes.notification_router import router as notification_router
 from app.routes.subscription_router import router as subscription_router
 from app.routes.workspace_router import router as workspace_router
-from app.routes.mcp_router import router as mcp_router
-app.include_router(mcp_router)
+from app.routes.mcp_router import mcp_app
+app.mount("/mcp", mcp_app)
 
 app.include_router(subscription_router)
 app.include_router(workspace_router)
