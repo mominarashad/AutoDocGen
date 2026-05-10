@@ -11,7 +11,7 @@ python-jose
 mcp>=1.0.0
 httpx
 pydantic
-
+mcp-remote
 langchain
 langchain-community
 langgraph
