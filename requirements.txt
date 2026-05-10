@@ -8,7 +8,7 @@ PyJWT
 bcrypt
 python-multipart
 python-jose
-
+mcp>=1.0.0
 httpx
 pydantic
 
