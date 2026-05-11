@@ -20,6 +20,10 @@ JWT_EXPIRES_IN = os.getenv("JWT_EXPIRES_IN", "15m")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 BASE_URL = os.getenv("BASE_URL", "http://localhost:4000")
 
+# ✅ ADMIN CREDENTIALS
+ADMIN_EMAIL = "admin@gmail.com"
+ADMIN_PASSWORD = "admin123"
+
 
 # -------------------------------
 # Models
@@ -39,7 +43,6 @@ class RegisterPayload(BaseModel):
 # Helpers
 # -------------------------------
 def issue_token(response: Response, user: dict):
-    """Set JWT cookie for dev & production with proper SameSite and Secure."""
     token = jwt.encode(
         {
             "id": str(user["_id"]),
@@ -50,14 +53,13 @@ def issue_token(response: Response, user: dict):
         algorithm="HS256"
     )
 
-    # Detect environment
     is_prod = os.getenv("NODE_ENV") == "production"
 
     response.set_cookie(
         key="token",
         value=token,
         httponly=True,
-        secure=is_prod,                 # must be True in production HTTPS
+        secure=is_prod,
         samesite="none" if is_prod else "lax",
         path="/"
     )
@@ -65,9 +67,7 @@ def issue_token(response: Response, user: dict):
     return token
 
 
-
 def serialize_user(user: dict) -> dict:
-    """Convert ObjectId and datetime to JSON-safe types"""
     user_copy = user.copy()
     if "_id" in user_copy and isinstance(user_copy["_id"], ObjectId):
         user_copy["_id"] = str(user_copy["_id"])
@@ -82,12 +82,33 @@ def serialize_user(user: dict) -> dict:
 @router.post("/signup")
 @router.post("/register")
 async def signup(payload: RegisterPayload, request: Request):
+
+    # ✅ ADMIN CHECK ON SIGNUP
+    if (
+        payload.email.strip().lower() == ADMIN_EMAIL and
+        payload.password == ADMIN_PASSWORD
+    ):
+        admin_user = {
+            "_id": "admin",
+            "email": ADMIN_EMAIL,
+            "name": "Admin",
+            
+        }
+        resp = JSONResponse({
+            "message": "Admin login successful",
+            "user": admin_user
+        })
+        return resp
+
     app = request.app
     existing = await find_user_by_email(app, payload.email)
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    pw_hash = bcrypt.hashpw(payload.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    pw_hash = bcrypt.hashpw(
+        payload.password.encode("utf-8"), bcrypt.gensalt()
+    ).decode("utf-8")
+
     user_doc = {
         "email": payload.email,
         "name": payload.name,
@@ -99,10 +120,13 @@ async def signup(payload: RegisterPayload, request: Request):
     new_user.pop("passwordHash", None)
     safe_user = serialize_user(new_user)
 
-    # JSON response with cookie
-    resp = JSONResponse({"message": "User registered successfully", "user": safe_user})
+    resp = JSONResponse({
+        "message": "User registered successfully",
+        "user": safe_user
+    })
     issue_token(resp, safe_user)
     return resp
+
 
 # -------------------------------
 # Signin
@@ -110,22 +134,43 @@ async def signup(payload: RegisterPayload, request: Request):
 @router.post("/signin")
 @router.post("/login")
 async def signin(payload: LoginPayload, request: Request):
+
+    # ✅ ADMIN CHECK ON SIGNIN
+    if (
+        payload.email.strip().lower() == ADMIN_EMAIL and
+        payload.password == ADMIN_PASSWORD
+    ):
+        admin_user = {
+            "_id": "admin",
+            "email": ADMIN_EMAIL,
+            "name": "Admin",
+        }
+        resp = JSONResponse({
+            "message": "Admin login successful",
+            "user": admin_user
+        })
+        return resp
+
     app = request.app
     user = await find_user_by_email(app, payload.email)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    if not bcrypt.checkpw(payload.password.encode("utf-8"), user.get("passwordHash", "").encode("utf-8")):
+    if not bcrypt.checkpw(
+        payload.password.encode("utf-8"),
+        user.get("passwordHash", "").encode("utf-8")
+    ):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     user.pop("passwordHash", None)
     safe_user = serialize_user(user)
 
-    # JSON response with cookie
-    resp = JSONResponse({"message": "Logged in successfully", "user": safe_user})
+    resp = JSONResponse({
+        "message": "Logged in successfully",
+        "user": safe_user
+    })
     issue_token(resp, safe_user)
     return resp
-
 
 
 # -------------------------------
@@ -167,7 +212,10 @@ async def google_callback(request: Request):
         token_res.raise_for_status()
         tokens = token_res.json()
         headers = {"Authorization": f"Bearer {tokens['access_token']}"}
-        user_res = await client.get("https://www.googleapis.com/oauth2/v2/userinfo", headers=headers)
+        user_res = await client.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers=headers
+        )
         user_res.raise_for_status()
         google_user = user_res.json()
 
@@ -237,15 +285,24 @@ async def github_callback(request: Request):
         if not access_token:
             raise HTTPException(status_code=400, detail="GitHub token missing")
 
-        user_res = await client.get("https://api.github.com/user", headers={"Authorization": f"Bearer {access_token}"})
+        user_res = await client.get(
+            "https://api.github.com/user",
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
         user_res.raise_for_status()
         github_user = user_res.json()
 
-        email_res = await client.get("https://api.github.com/user/emails", headers={"Authorization": f"Bearer {access_token}"})
+        email_res = await client.get(
+            "https://api.github.com/user/emails",
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
         email_res.raise_for_status()
         emails = email_res.json()
 
-    primary_email = next((e["email"] for e in emails if e.get("primary") and e.get("verified")), None)
+    primary_email = next(
+        (e["email"] for e in emails if e.get("primary") and e.get("verified")),
+        None
+    )
     if not primary_email:
         raise HTTPException(status_code=400, detail="No verified GitHub email")
 
