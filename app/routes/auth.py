@@ -127,7 +127,7 @@ async def signup(payload: RegisterPayload, request: Request):
             "_id": "admin",
             "email": ADMIN_EMAIL,
             "name": "Admin",
-            "role": "admin"
+            
         }
 
         resp = JSONResponse({
@@ -195,7 +195,7 @@ async def signin(payload: LoginPayload, request: Request):
             "_id": "admin",
             "email": ADMIN_EMAIL,
             "name": "Admin",
-            "role": "admin"
+            
         }
 
         resp = JSONResponse({
