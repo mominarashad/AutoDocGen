@@ -24,6 +24,7 @@ build/
 Thumbs.db
 .vscode/
 .idea/
+.next
 
 # Generated
 generated_docs/
